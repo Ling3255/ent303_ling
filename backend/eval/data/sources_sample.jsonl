@@ -1,0 +1,6 @@
+{"id": "r1", "title": "Robust Speech Recognition via Large-Scale Weak Supervision", "arxiv_id": "2212.04356", "real": true}
+{"id": "r2", "title": "wav2vec 2.0: A Framework for Self-Supervised Learning of Speech Representations", "arxiv_id": "2006.11477", "real": true}
+{"id": "r3", "title": "Deep Residual Learning for Image Recognition", "doi": "10.1109/cvpr.2016.90", "real": true}
+{"id": "r4", "title": "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks", "arxiv_id": "2005.11401", "real": true}
+{"id": "f1", "title": "Whisper-X: Zero-Shot Speech Recognition Surpasses Human Transcribers on LibriSpeech", "real": false}
+{"id": "f2", "title": "Contrastive Retrieval Fusion for Hallucination-Free RAG Evaluation", "doi": "10.1109/cvpr.2023.99999", "real": false}

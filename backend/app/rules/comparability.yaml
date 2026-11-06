@@ -1,0 +1,92 @@
+# 第 ③ 层“可比检查”的规则。程序逐字段对照两个结果的条件，按这里的规则分级。
+# 不写代码的组员可以直接改这个文件，改完重启后端即可生效。
+#
+# 分级：
+#   major = 有差异且可能影响结论（红）
+#   minor = 有差异但通常不影响（黄）
+#   unknown = 原文没写明，无法确认（黄）
+# 程序从不输出“可以放心比较”，最好的结果也只是“未发现条件差异”。
+
+fields:
+  dataset:
+    label: 数据集
+    differ: major
+    reason: 两个结果不是在同一个数据集上测的，数字不能直接比较。
+  split:
+    label: 数据划分
+    differ: major
+    reason: 同一数据集的不同划分难度不同（例如 test-clean 和 test-other），数字不能直接比较。
+  metric:
+    label: 指标
+    differ: major
+    reason: 两个结果用的指标不同，数字含义不同。
+  baseline:
+    label: 基线 / 模型配置
+    differ: minor
+    reason: 对照的基线或模型配置不同，比较时需要说明。
+  environment:
+    label: 测试环境
+    differ: minor
+    reason: 硬件或运行环境不同，通常不影响准确率类指标。
+
+# 某些差异虽然落在“次要”字段里，却会直接改变结论。
+# 规则：在 fields 列出的字段里查找各类别的关键词，两个结果落在不同类别时按 severity 分级。
+markers:
+  - name: 训练方式
+    fields: [environment, baseline, dataset]
+    severity: major
+    reason: 一方是零样本测试，另一方在同分布的训练集上微调过；数字接近不代表能力相当。
+    categories:
+      zero-shot: ["zero-shot", "zero shot", "零样本", "without fine-tuning", "without any fine-tuning", "no fine-tuning", "未微调", "out-of-distribution"]
+      fine-tuned: ["fine-tuned", "finetuned", "fine-tuning on", "微调", "trained on librispeech", "supervised on", "in-distribution", "labeled librispeech"]
+
+  - name: 语言模型
+    fields: [baseline, environment]
+    severity: major
+    reason: 一方解码时使用了外部语言模型，另一方没有；语言模型通常能明显降低 WER。
+    categories:
+      with-lm: ["with lm", "with a language model", "+ lm", "+lm", "4-gram", "transformer lm", "使用语言模型", "lm fusion", "shallow fusion"]
+      no-lm: ["no lm", "without lm", "w/o lm", "without a language model", "不使用语言模型", "无语言模型"]
+
+  - name: 文本归一化
+    fields: [environment, metric, baseline]
+    severity: minor
+    reason: WER 前的文本归一化方式不同，数字会有小幅差异。
+    categories:
+      whisper-normalizer: ["whisper normalizer", "our text normalizer", "text normalization", "normalized transcript"]
+      raw-transcript: ["unnormalized", "raw transcript", "without normalization"]
+
+  - name: 测试时增强
+    fields: [environment, baseline]
+    severity: major
+    reason: 一方测试时用了多裁剪 / 测试时增强，另一方是单裁剪，top-1 通常相差 1% 左右。
+    categories:
+      multi-crop: ["multi-crop", "10-crop", "144-crop", "test-time augmentation", "tta", "多裁剪"]
+      single-crop: ["single-crop", "single crop", "center crop", "centre crop", "单裁剪"]
+
+  - name: 预训练数据
+    fields: [environment, baseline, dataset]
+    severity: minor
+    reason: 两个模型预训练用的数据规模不同，比较时需要说明。
+    categories:
+      extra-data: ["jft", "imagenet-21k", "imagenet-22k", "in-21k", "laion", "extra data", "额外数据"]
+      in1k-only: ["imagenet-1k only", "trained from scratch on imagenet", "no extra data", "without extra data"]
+
+  - name: 检索设置
+    fields: [environment, baseline, split]
+    severity: major
+    reason: 一方直接给模型正确段落（oracle），另一方需要自己检索；前者分数天然更高。
+    categories:
+      oracle: ["oracle", "gold passage", "gold context", "gold document", "给定正确段落", "ground-truth passage"]
+      retrieved: ["retrieved passages", "top-k retrieval", "bm25", "dense retrieval", "dpr", "检索到的段落", "retriever"]
+
+  - name: 硬件
+    fields: [environment]
+    severity: minor
+    reason: 硬件不同，只影响速度类指标，通常不影响准确率。
+    categories:
+      gpu-a100: ["a100"]
+      gpu-v100: ["v100"]
+      gpu-h100: ["h100"]
+      tpu: ["tpu"]
+      cpu: ["cpu"]

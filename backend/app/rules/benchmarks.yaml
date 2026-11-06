@@ -1,0 +1,110 @@
+# 第一版覆盖的三个方向的常见基准：语音识别、图像分类、RAG 评测。
+# 用途：① 把不同写法归一成同一个名字（"LS test clean" → LibriSpeech / test-clean）；
+#      ② 没有配置大模型时，用这里的词表从原文里抽取条件。
+# 不写代码的组员可以直接改这个文件：新增一个数据集只要照着下面的格式加一项。
+
+datasets:
+  # ---------- 语音识别 ----------
+  LibriSpeech:
+    domain: asr
+    aliases: ["librispeech", "libri-speech", "libri speech"]
+    splits: [test-clean, test-other, dev-clean, dev-other]
+  Common Voice:
+    domain: asr
+    aliases: ["common voice", "commonvoice", "cv"]
+  TED-LIUM 3:
+    domain: asr
+    aliases: ["ted-lium", "tedlium", "ted-lium 3", "tedlium3"]
+  WSJ:
+    domain: asr
+    aliases: ["wsj", "wall street journal"]
+  Switchboard:
+    domain: asr
+    aliases: ["switchboard", "swbd"]
+  CHiME-6:
+    domain: asr
+    aliases: ["chime-6", "chime6", "chime"]
+  AISHELL-1:
+    domain: asr
+    aliases: ["aishell-1", "aishell1", "aishell"]
+  FLEURS:
+    domain: asr
+    aliases: ["fleurs"]
+  GigaSpeech:
+    domain: asr
+    aliases: ["gigaspeech"]
+
+  # ---------- 图像分类 ----------
+  ImageNet-1k:
+    domain: image
+    aliases: ["imagenet", "imagenet-1k", "imagenet1k", "ilsvrc-2012", "ilsvrc2012", "ilsvrc"]
+    splits: [val, test]
+  ImageNet-V2:
+    domain: image
+    aliases: ["imagenet-v2", "imagenetv2", "imagenet v2"]
+  ImageNet-ReaL:
+    domain: image
+    aliases: ["imagenet-real", "imagenet real", "real labels"]
+  ImageNet-21k:
+    domain: image
+    aliases: ["imagenet-21k", "imagenet21k", "imagenet-22k", "in-21k", "in21k"]
+  CIFAR-10:
+    domain: image
+    aliases: ["cifar-10", "cifar10"]
+  CIFAR-100:
+    domain: image
+    aliases: ["cifar-100", "cifar100"]
+  JFT-300M:
+    domain: image
+    aliases: ["jft-300m", "jft"]
+
+  # ---------- RAG 评测 ----------
+  Natural Questions:
+    domain: rag
+    aliases: ["natural questions", "naturalquestions", "nq", "nq-open"]
+  TriviaQA:
+    domain: rag
+    aliases: ["triviaqa", "trivia qa", "tqa"]
+  HotpotQA:
+    domain: rag
+    aliases: ["hotpotqa", "hotpot qa"]
+  MS MARCO:
+    domain: rag
+    aliases: ["ms marco", "msmarco"]
+  BEIR:
+    domain: rag
+    aliases: ["beir"]
+  WebQuestions:
+    domain: rag
+    aliases: ["webquestions", "webq"]
+  KILT:
+    domain: rag
+    aliases: ["kilt"]
+  RGB:
+    domain: rag
+    aliases: ["rgb benchmark"]
+  CRUD-RAG:
+    domain: rag
+    aliases: ["crud-rag", "crud rag"]
+
+splits:
+  test-clean: ["test-clean", "test clean", "clean test", "test_clean", "librispeech clean", "librispeech.test-clean"]
+  test-other: ["test-other", "test other", "other test", "test_other", "librispeech other", "librispeech.test-other"]
+  dev-clean: ["dev-clean", "dev clean", "dev_clean"]
+  dev-other: ["dev-other", "dev other", "dev_other"]
+  val: ["validation set", "val set", "validation", "val", "验证集"]
+  dev: ["dev set", "development set", "dev"]
+  test: ["test set", "test split", "测试集", "test"]
+
+metrics:
+  WER: ["wer", "word error rate", "词错误率", "词错率"]
+  CER: ["cer", "character error rate", "字错误率", "字错率"]
+  top-1 accuracy: ["top-1 accuracy", "top-1 acc", "top-1", "top1", "acc@1", "top 1"]
+  top-5 accuracy: ["top-5 accuracy", "top-5 acc", "top-5", "top5", "acc@5", "top 5"]
+  Exact Match: ["exact match", "em"]
+  F1: ["f1", "f1 score", "token f1"]
+  Recall@k: ["recall@", "r@", "top-20 accuracy", "top-100 accuracy", "retrieval accuracy"]
+  nDCG@10: ["ndcg@10", "ndcg"]
+  MRR: ["mrr", "mrr@10"]
+  Faithfulness: ["faithfulness", "忠实度"]
+  Answer Accuracy: ["answer accuracy", "回答准确率"]

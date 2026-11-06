@@ -1,0 +1,2 @@
+# 可选：bge-m3 向量检索（约 2.3 GB 模型），设置 EMBEDDING_BACKEND=bge-m3 后生效
+sentence-transformers==3.3.1

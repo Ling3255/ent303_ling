@@ -1,0 +1,51 @@
+# 一条命令启动全部服务：docker compose up -d --build
+# 浏览器打开 http://<服务器 IP>:8080
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: citecheck
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-citecheck}
+      POSTGRES_DB: citecheck
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U citecheck"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
+
+  grobid:
+    # 至少 4 GB 内存
+    image: lfoppiano/grobid:0.8.1
+    restart: unless-stopped
+
+  backend:
+    build: ./backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://citecheck:${POSTGRES_PASSWORD:-citecheck}@db:5432/citecheck
+      GROBID_URL: http://grobid:8070
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      grobid:
+        condition: service_started
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  uploads:
