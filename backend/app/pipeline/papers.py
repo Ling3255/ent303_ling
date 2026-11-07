@@ -167,13 +167,22 @@ def parse_tei(tei_xml: str) -> tuple[dict, list[dict]]:
     return header, paragraphs
 
 
-def parse_with_grobid(data: bytes) -> tuple[dict, list[dict]]:
+# httpx 带文件上传时 data 必须是 dict；同名字段（teiCoordinates）用列表表示多个值
+GROBID_FORM = {
+    "teiCoordinates": ["p", "head", "figure"],
+    "consolidateHeader": "0",
+    "consolidateCitations": "0",
+}
+
+
+def grobid_request(data: bytes) -> httpx.Request:
     files = {"input": ("paper.pdf", data, "application/pdf")}
-    form = [
-        ("teiCoordinates", "p"), ("teiCoordinates", "head"), ("teiCoordinates", "figure"),
-        ("consolidateHeader", "0"), ("consolidateCitations", "0"),
-    ]
-    r = httpx.post(f"{settings.grobid_url}/api/processFulltextDocument", files=files, data=form, timeout=180)
+    return httpx.Request("POST", f"{settings.grobid_url}/api/processFulltextDocument", files=files, data=GROBID_FORM)
+
+
+def parse_with_grobid(data: bytes) -> tuple[dict, list[dict]]:
+    with httpx.Client(timeout=180) as client:
+        r = client.send(grobid_request(data))
     r.raise_for_status()
     return parse_tei(r.text)
 
@@ -232,8 +241,8 @@ def parse_pdf(data: bytes) -> tuple[dict, list[dict], str, Optional[str]]:
                 if not any(p["kind"] == "table" for p in paragraphs):
                     warning = "没有从这篇论文中解析出表格，表格里的数字可能无法核对。"
                 return header, paragraphs, "grobid", warning
-        except (httpx.HTTPError, ET.ParseError) as exc:
-            log.warning("GROBID 解析失败，改用 pypdf：%s", exc)
+        except Exception as exc:  # GROBID 任何问题都不应让整篇论文读取失败，退回简易解析
+            log.warning("GROBID 解析失败，改用 pypdf：%r", exc)
     header, paragraphs = parse_with_pypdf(data)
     warning = "使用简易解析（未连接 GROBID），表格结构和段落边界可能不准确，也无法在 PDF 中高亮段落。"
     if not paragraphs:

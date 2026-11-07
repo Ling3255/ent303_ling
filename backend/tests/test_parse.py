@@ -43,3 +43,49 @@ def test_parse_tei():
     assert no_coords["page"] == 6  # 沿用上一段页码
     assert table["kind"] == "table" and table["page"] == 7
     assert "LibriSpeech Clean | 2.7 | 2.7" in table["text"]
+
+
+def test_grobid_request_encodes_repeated_fields(monkeypatch):
+    from app.config import settings
+    from app.pipeline.papers import grobid_request
+
+    monkeypatch.setattr(settings, "grobid_url", "http://grobid:8070")
+    req = grobid_request(b"%PDF-1.4 test")
+    body = req.read()
+    assert str(req.url) == "http://grobid:8070/api/processFulltextDocument"
+    assert body.count(b'name="teiCoordinates"') == 3
+    for value in (b"\r\n\r\np\r\n", b"\r\n\r\nhead\r\n", b"\r\n\r\nfigure\r\n"):
+        assert value in body
+    assert b'filename="paper.pdf"' in body and b"%PDF-1.4 test" in body
+
+
+def test_grobid_end_to_end_with_mock(monkeypatch):
+    import httpx
+
+    from app.config import settings
+    from app.pipeline import papers
+
+    monkeypatch.setattr(settings, "grobid_url", "http://grobid:8070")
+
+    def handler(request):
+        assert b'name="teiCoordinates"' in request.read()
+        return httpx.Response(200, text=TEI)
+
+    real_client = httpx.Client
+    monkeypatch.setattr(papers.httpx, "Client", lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
+    header, paras, parser, warning = papers.parse_pdf(b"%PDF-1.4 test")
+    assert parser == "grobid" and header["arxiv_id"] == "2212.04356"
+    assert any(p["kind"] == "table" and p["page"] == 7 for p in paras)
+    assert warning is None
+
+
+def test_grobid_failure_falls_back_to_pypdf(monkeypatch):
+    from app.config import settings
+    from app.pipeline import papers
+
+    monkeypatch.setattr(settings, "grobid_url", "http://grobid:8070")
+    monkeypatch.setattr(papers, "parse_with_grobid", lambda data: (_ for _ in ()).throw(TypeError("boom")))
+    monkeypatch.setattr(papers, "parse_with_pypdf", lambda data: ({"title": "x"}, [{"id": "p1", "kind": "text", "section": "",
+                                                                                    "text": "hello world", "page": 1, "boxes": []}]))
+    header, paras, parser, warning = papers.parse_pdf(b"%PDF")
+    assert parser == "pypdf" and paras and "GROBID" in warning
