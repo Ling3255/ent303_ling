@@ -27,7 +27,7 @@ SUPPORT_LABELS = {
     "contradicted": "说法相反",
     "number_mismatch": "数字不一致",
 }
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"  # 改提示词时加一，旧的条件缓存自动失效
 
 SUPPORT_SYSTEM = """你是 CiteCheck 的原文核对模块。给你一条论断和同一篇论文中检索出的候选段落（含表格）。
 任务一：判断论文是否支持这条论断。
@@ -37,10 +37,13 @@ SUPPORT_SYSTEM = """你是 CiteCheck 的原文核对模块。给你一条论断�
 - not_found：候选段落里没有这个说法。拿不准时选 not_found。
 任务二：抽取论文中“这个结果”的测试条件，五个字段：
 - dataset 数据集（如 LibriSpeech、ImageNet-1k、Natural Questions）
-- split 数据划分（如 test-clean、val、dev）
+- split 数据划分，用规范写法（如 test-clean、test-other、val、dev）。表格里的 "LibriSpeech Clean" 指 test-clean，"LibriSpeech Other" 指 test-other
 - metric 指标（如 WER、top-1 accuracy、Exact Match）
-- baseline 基线 / 模型配置（如 large-v2、无语言模型、作为对照的模型）
-- environment 测试环境（如零样本 / 微调、解码方式、是否用 oracle 段落、硬件）
+- baseline 模型配置：模型规模/版本，以及解码时是否用外部语言模型（如 "Large (no LM)"、"large-v2"）
+- environment 训练与评测方式。先写训练方式：zero-shot（没在该数据集的训练集上训练）、fine-tuned on X / trained on X（在该数据集训练集上有监督训练或微调）；
+  再写其他评测设置（是否给 oracle 段落、测试时增强、硬件）。是否用语言模型写在 baseline，不要写在这里
+特别注意：结果如果属于对比表里的另一个模型（基线），要在候选段落里找这个模型本身的训练方式
+（例如“a supervised LibriSpeech model”“fine-tuned on 960 hours of labeled LibriSpeech”），而不是照抄论文主模型的设置。
 规则：
 - 每个字段的 quote 必须从候选段落中逐字复制（英文原文，不要翻译、不要改写、不要拼接）。
 - 找不到原句支持的字段，value 和 quote 都填 null。绝对不要凭常识补。

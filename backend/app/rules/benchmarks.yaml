@@ -96,6 +96,22 @@ splits:
   dev: ["dev set", "development set", "dev"]
   test: ["test set", "test split", "测试集", "test"]
 
+# 字段值整体就是这些简写时才换成规范名（只用于对照条件，不用于在论文正文里查找，避免误匹配）
+value_aliases:
+  split:
+    clean: test-clean
+    other: test-other
+    "test clean": test-clean
+    "test other": test-other
+    "ls clean": test-clean
+    "ls other": test-other
+    "librispeech clean": test-clean
+    "librispeech other": test-other
+  metric:
+    "word error rate (%)": WER
+    "wer (%)": WER
+    "top-1 (%)": top-1 accuracy
+
 metrics:
   WER: ["wer", "word error rate", "词错误率", "词错率"]
   CER: ["cer", "character error rate", "字错误率", "字错率"]

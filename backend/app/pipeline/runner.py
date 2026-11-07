@@ -107,8 +107,8 @@ def _run(check_id: str, started: float) -> None:
                     jobs.append((idx, ci, claim, paper))
     candidates = {}
     for idx, ci, claim, paper in jobs:
-        candidates[(claim["id"], paper.id)] = retrieve(paper.cache_key, paper.paragraphs, claim["query"],
-                                                      claim.get("values"))
+        found = retrieve(paper.cache_key, paper.paragraphs, claim["query"], claim.get("values"))
+        candidates[(claim["id"], paper.id)] = found + condition_paragraphs(paper, claim, found)
 
     # 5. 判断是否支持并抽取条件（大模型调用并行）
     _set_stage(check_id, "extracting")
@@ -160,6 +160,26 @@ def _run(check_id: str, started: float) -> None:
         check.finished_at = utcnow()
         check.duration_s = duration
         session.commit()
+
+
+_CONDITION_QUERY = ("trained fine-tuned fine-tuning supervised zero-shot training data labeled hours "
+                    "evaluation setup language model decoding oracle retrieved")
+
+
+def condition_paragraphs(paper: Paper, claim: dict, found: list[dict], limit: int = 3) -> list[dict]:
+    """再检索一次“这个模型是怎么训练/评测的”。按数字找到的往往是结果表格，训练方式写在别的段落里。"""
+    subject = (claim.get("subject") or "").strip()
+    if not subject:
+        return []
+    head = subject.split()[0].lower()
+    seen = {p["id"] for p in found}
+    extra = []
+    for p in retrieve(paper.cache_key, paper.paragraphs, f"{subject} {_CONDITION_QUERY}", top_k=12):
+        if p["id"] not in seen and head in p["text"].lower():
+            extra.append(p)
+            if len(extra) >= limit:
+                break
+    return extra
 
 
 def _sentence_report(s: dict, info: Optional[dict], judged: dict, by_id: dict) -> dict:

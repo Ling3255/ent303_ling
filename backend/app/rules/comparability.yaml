@@ -36,9 +36,12 @@ markers:
     fields: [environment, baseline, dataset]
     severity: major
     reason: 一方是零样本测试，另一方在同分布的训练集上微调过；数字接近不代表能力相当。
+    # 一方写明了训练方式、另一方没写时，也要提示（至少标黄）
+    flag_if_one_sided: true
+    one_sided_reason: 一方原文写明是“{known}”，另一方没有写训练方式；如果另一方在该数据集的训练集上训练过，两个数字不能直接比较。
     categories:
-      zero-shot: ["zero-shot", "zero shot", "零样本", "without fine-tuning", "without any fine-tuning", "no fine-tuning", "未微调", "out-of-distribution"]
-      fine-tuned: ["fine-tuned", "finetuned", "fine-tuning on", "微调", "trained on librispeech", "supervised on", "in-distribution", "labeled librispeech"]
+      zero-shot: ["zero-shot", "zero shot", "零样本", "without fine-tuning", "without any fine-tuning", "no fine-tuning", "未微调", "out-of-distribution", "never see", "without using any of the training data"]
+      fine-tuned: ["fine-tuned", "finetuned", "fine-tuning on", "微调", "trained on librispeech", "supervised on", "in-distribution", "labeled librispeech", "supervised librispeech", "librispeech-trained", "trained on the librispeech", "960 hours of labeled", "960h"]
 
   - name: 语言模型
     fields: [baseline, environment]
@@ -76,6 +79,8 @@ markers:
     fields: [environment, baseline, split]
     severity: major
     reason: 一方直接给模型正确段落（oracle），另一方需要自己检索；前者分数天然更高。
+    flag_if_one_sided: true
+    one_sided_reason: 一方原文写明是“{known}”设置，另一方没有写段落从哪里来；oracle 段落和检索段落的分数不能直接比较。
     categories:
       oracle: ["oracle", "gold passage", "gold context", "gold document", "给定正确段落", "ground-truth passage"]
       retrieved: ["retrieved passages", "top-k retrieval", "bm25", "dense retrieval", "dpr", "检索到的段落", "retriever"]

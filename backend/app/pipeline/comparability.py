@@ -1,6 +1,7 @@
 """第 6 步：判断是否可比（③）。逐字段对照两个结果的条件，按 rules/comparability.yaml 分级。不用大模型。"""
 from __future__ import annotations
 
+import re
 from functools import lru_cache
 from itertools import combinations
 from pathlib import Path
@@ -60,6 +61,23 @@ def _marker_category(marker: dict, text: str) -> Optional[str]:
     return None
 
 
+def _tokens(value: str) -> set[str]:
+    return set(re.findall(r"[a-z0-9]+|[一-鿿]", value.lower()))
+
+
+def _compatible(ca: str, cb: str) -> bool:
+    ta, tb = _tokens(ca), _tokens(cb)
+    return bool(ta and tb) and (ta <= tb or tb <= ta)
+
+
+def _side_category(marker: dict, cond: dict) -> Optional[str]:
+    """先看规则指定的字段；没命中再看这一方所有字段的值和原句（训练方式常常写在数据集或基线的原句里）。"""
+    cat = _marker_category(marker, " ".join(_field_text(cond, f) for f in marker["fields"]))
+    if cat:
+        return cat
+    return _marker_category(marker, " ".join(_field_text(cond, f) for f in cond))
+
+
 def compare_conditions(a: dict, b: dict) -> dict:
     """a、b 是两个结果的条件：{field: {"value", "quote", ...}}。返回逐字段结果和总等级。"""
     rules = load_rules()
@@ -73,6 +91,9 @@ def compare_conditions(a: dict, b: dict) -> dict:
             severity, reason = "unknown", "至少一方原文没有写明这一项，无法确认是否一致。"
         elif ca == cb:
             severity, reason = "same", "两边一致。"
+        elif _compatible(ca, cb):
+            # 例如 "clean" 和 "test-clean"：一方只是写得更简略，不能断定不同
+            severity, reason = "unknown", f"两边写法不同（{va} / {vb}），可能是同一项，请核对原文。"
         else:
             severity, reason = spec["differ"], spec["reason"]
         fields_out.append({
@@ -88,8 +109,17 @@ def compare_conditions(a: dict, b: dict) -> dict:
     # 关键差异标记：在相关字段的值和原句里找关键词，两边落在不同类别时提级
     by_field = {f["field"]: f for f in fields_out}
     for marker in rules.get("markers") or []:
-        cat_a = _marker_category(marker, " ".join(_field_text(a, f) for f in marker["fields"]))
-        cat_b = _marker_category(marker, " ".join(_field_text(b, f) for f in marker["fields"]))
+        cat_a, cat_b = _side_category(marker, a), _side_category(marker, b)
+        if marker.get("flag_if_one_sided") and bool(cat_a) != bool(cat_b):
+            # 一方明确是零样本 / oracle，另一方没写：不能当成一致，至少提示需要核对
+            target = by_field[marker["fields"][0]]
+            known = cat_a or cat_b
+            target["markers"].append({"name": marker["name"], "a": cat_a or "原文未写明", "b": cat_b or "原文未写明",
+                                      "reason": marker["one_sided_reason"].format(known=known)})
+            if SEVERITY_ORDER[target["severity"]] < SEVERITY_ORDER["minor"]:
+                target["severity"] = "minor"
+                target["reason"] = marker["one_sided_reason"].format(known=known)
+            continue
         if not (cat_a and cat_b and cat_a != cat_b):
             continue
         # 记在第一个命中关键词的字段上

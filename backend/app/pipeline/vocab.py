@@ -79,6 +79,10 @@ def canonical(value: Optional[str], kind: str) -> Optional[str]:
     """把一个字段值归一化；词表里没有就返回小写去空白后的原值。"""
     if not value:
         return None
+    key = re.sub(r"\s+", " ", value.strip().lower())
+    alias = ((load_vocab()["raw"].get("value_aliases") or {}).get(kind) or {}).get(key)
+    if alias:
+        return alias
     hits = sorted({m.canonical for m in find_terms(value, (kind,))})
     if hits:
         return " + ".join(hits)
