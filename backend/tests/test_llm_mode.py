@@ -101,3 +101,43 @@ def test_whisper_example_llm_mode(whisper_paragraphs, monkeypatch):
     assert fields["environment"]["markers"][0]["name"] == "训练方式"
     assert {fields["environment"]["markers"][0]["a"], fields["environment"]["markers"][0]["b"]} == {"zero-shot", "fine-tuned"}
     assert sentence["color"] == "red"
+
+
+# 按论文原文写的段落（第二次真实测试发现：正文从不点名 wav2vec 的训练方式）
+REAL_REF = ("For a detailed breakdown of this large improvement in robustness, Table 2 compares the performance of the "
+            "best zero-shot Whisper model with a supervised LibriSpeech model that has the closest performance to it "
+            "on LibriSpeech test-clean.")
+REAL_LIST = ("facebook/wav2vec2-large-960h-lv60-self (Xu et al., 2021)\nfacebook/wav2vec2-large-robust-ft-libri-960h\n"
+             "facebook/wav2vec2-base-960h (Baevski et al., 2020)")
+
+
+def _real_like_paper(whisper_paragraphs):
+    table = next(p for p in whisper_paragraphs if p["kind"] == "table")
+    filler = [{"id": f"f{i}", "kind": "text", "section": "", "page": 10 + i, "boxes": [],
+               "text": f"Whisper results on LibriSpeech test-clean WER {i}.{i} are discussed in section {i}."}
+              for i in range(1, 15)]
+    ref = {"id": "ref", "kind": "text", "section": "3.3", "page": 6, "boxes": [], "text": REAL_REF}
+    lst = {"id": "lst", "kind": "text", "section": "D.1", "page": 20, "boxes": [], "text": REAL_LIST}
+    return Paper(cache_key="real-like", paragraphs=[table, *filler, ref, lst]), table
+
+
+def test_condition_paragraphs_include_table_reference_and_model_list(whisper_paragraphs):
+    paper, table = _real_like_paper(whisper_paragraphs)
+    ids = {p["id"] for p in condition_paragraphs(paper, {"subject": "wav2vec 2.0"}, [table])}
+    assert "ref" in ids  # 引用 Table 2 的正文段落，虽然没点名 wav2vec
+    assert "lst" in ids  # 附录模型清单
+
+
+def test_quote_mentioning_both_sides_uses_value():
+    # 原句同时有 zero-shot 和 supervised LibriSpeech，以值为准
+    out = compare_conditions(
+        _c(environment=("zero-shot", "Whisper models are evaluated zero-shot")),
+        _c(environment=("supervised on LibriSpeech (fine-tuned)", REAL_REF)),
+    )
+    env = {f["field"]: f for f in out["fields"]}["environment"]
+    assert env["severity"] == "major" and env["markers"][0]["b"] == "fine-tuned"
+    # 值本身说不清时，原句同时命中两类 → 不乱判，按“一方未写明”提示
+    out = compare_conditions(_c(environment=("zero-shot", "evaluated zero-shot")),
+                             _c(environment=("baseline", REAL_REF)))
+    env = {f["field"]: f for f in out["fields"]}["environment"]
+    assert env["severity"] in ("minor", "major") and env["markers"]

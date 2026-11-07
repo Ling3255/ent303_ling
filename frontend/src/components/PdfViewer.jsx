@@ -78,14 +78,15 @@ export default function PdfViewer({ paperId, paper, page: initialPage, boxes = N
       renderTask = p.render({ canvasContext: canvas.getContext("2d"), viewport });
       await renderTask.promise.catch(() => {});
       if (cancelled) return;
-      // GROBID 给了段落坐标就直接画框；否则在文字层里搜原句
-      const pageBoxes = boxes.filter((b) => b.page === page);
-      if (pageBoxes.length) {
-        setRects(pageBoxes.map((b) => ({ x: b.x * scale, y: b.y * scale, w: b.w * scale, h: b.h * scale })));
-      } else {
-        const content = await p.getTextContent();
-        if (!cancelled) setRects(findQuoteRects(content, viewport, quote));
-      }
+      // GROBID 的段落 / 表格坐标画成淡色外框（表格的框往往很大）；
+      // 原句本身在文字层里定位，画成紧贴文字的黄色高亮（表格就是那一行）
+      const pageBoxes = boxes
+        .filter((b) => b.page === page)
+        .map((b) => ({ x: b.x * scale, y: b.y * scale, w: b.w * scale, h: b.h * scale, kind: "box" }));
+      const content = await p.getTextContent();
+      if (cancelled) return;
+      const quoteRects = findQuoteRects(content, viewport, quote).map((r) => ({ ...r, kind: "quote" }));
+      setRects([...pageBoxes, ...quoteRects]);
     })();
     return () => {
       cancelled = true;
@@ -129,12 +130,16 @@ export default function PdfViewer({ paperId, paper, page: initialPage, boxes = N
               <canvas ref={canvasRef} />
               {page === initialPage &&
                 rects.map((r, i) => (
-                  <div key={i} className="pdf-highlight" style={{ left: r.x, top: r.y, width: r.w, height: r.h }} />
+                  <div
+                    key={i}
+                    className={r.kind === "box" ? "pdf-box" : "pdf-highlight"}
+                    style={{ left: r.x, top: r.y, width: r.w, height: r.h }}
+                  />
                 ))}
             </div>
           )}
-          {!error && page === initialPage && quote && doc && rects.length === 0 && (
-            <div className="hint">没能在这一页自动定位原句，请在页面中查找上方的引文。</div>
+          {!error && page === initialPage && quote && doc && !rects.some((r) => r.kind === "quote") && (
+            <div className="hint">没能在这一页精确定位原句（虚线框是段落大致位置），请对照上方的引文查找。</div>
           )}
         </div>
       </div>

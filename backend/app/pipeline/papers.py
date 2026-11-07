@@ -149,6 +149,10 @@ def parse_tei(tei_xml: str) -> tuple[dict, list[dict]]:
                 section = f"{head.get('n')} {section}"
             for p in div.findall("t:p", TEI):
                 add("text", section, _itertext(p), p.get("coords"))
+            # GROBID 把列表（如附录里的模型清单）放在 <list><item> 里，不读就会整段丢失
+            items = [i for lst in div.findall("t:list", TEI) for i in lst.findall("t:item", TEI)]
+            if items:
+                add("text", section, "\n".join(_itertext(i) for i in items), items[0].get("coords"))
         for fig in body.iter(f"{{{TEI['t']}}}figure"):
             caption = " ".join(_itertext(x) for x in fig.findall("t:head", TEI) + fig.findall("t:figDesc", TEI))
             if fig.get("type") == "table":

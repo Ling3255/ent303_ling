@@ -27,7 +27,7 @@ SUPPORT_LABELS = {
     "contradicted": "说法相反",
     "number_mismatch": "数字不一致",
 }
-PROMPT_VERSION = "v2"  # 改提示词时加一，旧的条件缓存自动失效
+PROMPT_VERSION = "v3"  # 改提示词时加一，旧的条件缓存自动失效
 
 SUPPORT_SYSTEM = """你是 CiteCheck 的原文核对模块。给你一条论断和同一篇论文中检索出的候选段落（含表格）。
 任务一：判断论文是否支持这条论断。
@@ -44,6 +44,9 @@ SUPPORT_SYSTEM = """你是 CiteCheck 的原文核对模块。给你一条论断�
   再写其他评测设置（是否给 oracle 段落、测试时增强、硬件）。是否用语言模型写在 baseline，不要写在这里
 特别注意：结果如果属于对比表里的另一个模型（基线），要在候选段落里找这个模型本身的训练方式
 （例如“a supervised LibriSpeech model”“fine-tuned on 960 hours of labeled LibriSpeech”），而不是照抄论文主模型的设置。
+线索常在这些地方：引用这张表的正文段落（如 "Table 2 compares the best zero-shot Whisper model with a supervised LibriSpeech model"，
+说明表中另一列是在 LibriSpeech 上有监督训练的模型）；附录里的模型清单（如 "wav2vec2-large-960h" 表示在 LibriSpeech 960 小时上训练）。
+找到这类线索时 environment 要写成 "fine-tuned on LibriSpeech" 之类，并逐字引用那句话。
 规则：
 - 每个字段的 quote 必须从候选段落中逐字复制（英文原文，不要翻译、不要改写、不要拼接）。
 - 找不到原句支持的字段，value 和 quote 都填 null。绝对不要凭常识补。

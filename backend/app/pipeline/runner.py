@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Optional
@@ -162,24 +163,53 @@ def _run(check_id: str, started: float) -> None:
         session.commit()
 
 
-_CONDITION_QUERY = ("trained fine-tuned fine-tuning supervised zero-shot training data labeled hours "
-                    "evaluation setup language model decoding oracle retrieved")
+# 讲训练 / 评测方式的段落里常见的词（子串匹配）
+_CONDITION_TERMS = ("train", "fine-tun", "finetun", "supervis", "zero-shot", "labeled", "labelled", "hours", "960h",
+                    "-ft-", "language model", "decod", "oracle", "retriev", "pre-train", "pretrain", "crop")
 
 
 def condition_paragraphs(paper: Paper, claim: dict, found: list[dict], limit: int = 3) -> list[dict]:
     """再检索一次“这个模型是怎么训练/评测的”。按数字找到的往往是结果表格，训练方式写在别的段落里。"""
-    subject = (claim.get("subject") or "").strip()
-    if not subject:
-        return []
-    head = subject.split()[0].lower()
     seen = {p["id"] for p in found}
     extra = []
-    for p in retrieve(paper.cache_key, paper.paragraphs, f"{subject} {_CONDITION_QUERY}", top_k=12):
-        if p["id"] not in seen and head in p["text"].lower():
-            extra.append(p)
-            if len(extra) >= limit:
-                break
+
+    # ① 正文里引用同一张表的段落：表格各列模型的设置通常写在这里，而且不一定点名
+    #   （例如 "Table 2 compares ... with a supervised LibriSpeech model"）
+    for label in _table_labels(found[:3]):
+        pattern = re.compile(rf"\b{label}(?!\d)", re.I)
+        for p in paper.paragraphs:
+            if p["id"] not in seen and p["kind"] == "text" and pattern.search(p["text"]):
+                extra.append(p)
+                seen.add(p["id"])
+                if len(extra) >= 2:
+                    break
+
+    # ② 提到这个模型、并且讲训练/评测方式的段落（包括附录里的模型清单，如 "wav2vec2-large-960h"）
+    subject = (claim.get("subject") or "").strip()
+    if subject:
+        head = subject.split()[0].lower()
+        scored = []
+        for p in paper.paragraphs:
+            text = p["text"].lower()
+            if p["id"] in seen or head not in text:
+                continue
+            score = sum(term in text for term in _CONDITION_TERMS)
+            if score:
+                scored.append((score, p))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        extra.extend(p for _, p in scored[:limit])
     return extra
+
+
+def _table_labels(paragraphs: list[dict]) -> list[str]:
+    labels = []
+    for p in paragraphs:
+        if p["kind"] != "table":
+            continue
+        m = re.search(r"\btable\s*(\d+)", f"{p.get('section') or ''} {p['text'][:200]}", re.I)
+        if m and f"Table {m.group(1)}" not in labels:
+            labels.append(f"Table {m.group(1)}")
+    return [l.replace(" ", r"\s*") for l in labels]
 
 
 def _sentence_report(s: dict, info: Optional[dict], judged: dict, by_id: dict) -> dict:

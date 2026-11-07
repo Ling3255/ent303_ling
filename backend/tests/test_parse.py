@@ -20,6 +20,9 @@ TEI = """<?xml version="1.0" encoding="UTF-8"?>
         <p coords="6,50,100,250,40;6,50,140,250,40">Whisper models are evaluated zero-shot.</p>
         <p>No coordinates for this one.</p>
       </div>
+      <div><head n="D.1">Models</head>
+        <list><item coords="20,50,100,200,10">facebook/wav2vec2-large-960h</item><item>facebook/wav2vec2-base-100h</item></list>
+      </div>
       <figure type="table" coords="7,54,80,240,160">
         <head>Table 2.</head>
         <figDesc>Detailed comparison of effective robustness.</figDesc>
@@ -37,7 +40,8 @@ def test_parse_tei():
     assert header["authors"] == ["Alec Radford", "Jong Wook Kim"]
     assert header["year"] == 2022 and header["arxiv_id"] == "2212.04356"
 
-    abstract, body, no_coords, table = paras
+    abstract, body, no_coords, model_list, table = paras
+    assert model_list["page"] == 20 and "wav2vec2-large-960h\nfacebook/wav2vec2-base-100h" in model_list["text"]
     assert abstract["section"] == "Abstract" and abstract["page"] == 1
     assert body["section"] == "3.3 English Speech Recognition" and len(body["boxes"]) == 2
     assert no_coords["page"] == 6  # 沿用上一段页码

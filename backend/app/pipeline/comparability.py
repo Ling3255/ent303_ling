@@ -70,12 +70,32 @@ def _compatible(ca: str, cb: str) -> bool:
     return bool(ta and tb) and (ta <= tb or tb <= ta)
 
 
+def _item_parts(cond: dict, field: str) -> tuple[str, str]:
+    item = cond.get(field)
+    if isinstance(item, dict):
+        return item.get("value") or "", item.get("quote") or ""
+    return item or "", ""
+
+
+def _all_categories(marker: dict, text: str) -> set[str]:
+    lowered = text.lower()
+    return {name for name, kws in marker["categories"].items() if any(k.lower() in lowered for k in kws)}
+
+
 def _side_category(marker: dict, cond: dict) -> Optional[str]:
-    """先看规则指定的字段；没命中再看这一方所有字段的值和原句（训练方式常常写在数据集或基线的原句里）。"""
-    cat = _marker_category(marker, " ".join(_field_text(cond, f) for f in marker["fields"]))
-    if cat:
-        return cat
-    return _marker_category(marker, " ".join(_field_text(cond, f) for f in cond))
+    """这一方属于标记的哪一类。
+
+    依次看：规则字段的值 → 规则字段的原句 → 其他字段的值 → 其他字段的原句。
+    原句常常同时提到两边（"compares the zero-shot Whisper model with a supervised LibriSpeech model"），
+    同一层同时命中两类时视为说不清，继续看下一层。
+    """
+    own = list(marker["fields"])
+    others = [f for f in cond if f not in own]
+    for fields, part in ((own, 0), (own, 1), (others, 0), (others, 1)):
+        cats = _all_categories(marker, " ".join(_item_parts(cond, f)[part] for f in fields))
+        if len(cats) == 1:
+            return cats.pop()
+    return None
 
 
 def compare_conditions(a: dict, b: dict) -> dict:
