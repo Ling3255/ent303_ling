@@ -7,15 +7,16 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal, Optional
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from . import services
+from . import auth, services
 from .config import settings
-from .db import Check, Feedback, Paper, get_session, init_db
+from .db import Check, Feedback, Paper, User, get_session, init_db
 from .pipeline.runner import paper_summary, run_check, stage_list
 from .pipeline.sentences import split_and_flag
 
@@ -42,6 +43,15 @@ class SplitIn(BaseModel):
 
 class IdentifierIn(BaseModel):
     identifier: str = Field(..., description="DOI、arXiv 编号或论文标题")
+
+
+class EmailIn(BaseModel):
+    email: str
+
+
+class VerifyIn(BaseModel):
+    email: str
+    code: str
 
 
 class SentenceChoice(BaseModel):
@@ -80,8 +90,42 @@ def health():
         "grobid": bool(settings.grobid_url),
         "embedding": settings.embedding_backend,
         "limits": {"max_text_chars": settings.max_text_chars, "max_papers": settings.max_papers},
+        "auth": {"required": settings.auth_required, "domains": settings.allowed_email_domains,
+                 "monthly_quota": settings.monthly_quota},
         "stages": stage_list(),
     }
+
+
+@app.post("/api/auth/request-code")
+def auth_request_code(body: EmailIn, session: Session = Depends(get_session)):
+    return auth.request_code(session, body.email)
+
+
+@app.post("/api/auth/verify")
+def auth_verify(body: VerifyIn, session: Session = Depends(get_session)):
+    return auth.verify_code(session, body.email, body.code)
+
+
+@app.post("/api/auth/logout")
+def auth_logout(authorization: Optional[str] = Header(None), session: Session = Depends(get_session)):
+    auth.logout(session, auth._token(authorization))
+    return {"ok": True}
+
+
+@app.get("/api/me")
+def me(user: Optional[User] = Depends(auth.current_user), session: Session = Depends(get_session)):
+    if not user:
+        raise HTTPException(401, "未登录。")
+    return auth.user_info(session, user)
+
+
+@app.get("/api/me/checks")
+def my_checks(user: Optional[User] = Depends(auth.current_user), session: Session = Depends(get_session)):
+    if not user:
+        raise HTTPException(401, "未登录。")
+    rows = session.scalars(select(Check).where(Check.user_id == user.id).order_by(Check.created_at.desc()).limit(50)).all()
+    return [{"id": c.id, "status": c.status, "created_at": c.created_at.isoformat(), "preview": c.text[:80],
+             "summary": (c.report or {}).get("summary")} for c in rows]
 
 
 @app.post("/api/split")
@@ -123,8 +167,10 @@ def get_paper_pdf(paper_id: str, session: Session = Depends(get_session)):
 
 
 @app.post("/api/checks")
-def create_check(body: CheckIn, session: Session = Depends(get_session)):
+def create_check(body: CheckIn, session: Session = Depends(get_session),
+                 user: Optional[User] = Depends(auth.current_user)):
     text = _check_text(body.text)
+    auth.require_quota(session, user)
     if not body.paper_ids:
         raise HTTPException(400, "请至少添加一篇论文。")
     if len(body.paper_ids) > settings.max_papers:
@@ -142,7 +188,8 @@ def create_check(body: CheckIn, session: Session = Depends(get_session)):
         for s in sentences:
             s["selected"] = s["suggested"]
 
-    check = Check(text=text, sentences=sentences, paper_ids=list(dict.fromkeys(body.paper_ids)), status="queued")
+    check = Check(text=text, sentences=sentences, paper_ids=list(dict.fromkeys(body.paper_ids)), status="queued",
+                  user_id=user.id if user else None)
     session.add(check)
     session.commit()
     check_executor.submit(run_check, check.id)
@@ -168,10 +215,11 @@ def get_check(check_id: str, session: Session = Depends(get_session)):
 
 
 @app.post("/api/checks/{check_id}/feedback")
-def add_feedback(check_id: str, body: FeedbackIn, session: Session = Depends(get_session)):
+def add_feedback(check_id: str, body: FeedbackIn, session: Session = Depends(get_session),
+                 user: Optional[User] = Depends(auth.current_user)):
     if not session.get(Check, check_id):
         raise HTTPException(404, "找不到这次检查。")
-    fb = Feedback(check_id=check_id, sentence_idx=body.sentence_idx, layer=body.layer,
+    fb = Feedback(check_id=check_id, user_id=user.id if user else None, sentence_idx=body.sentence_idx, layer=body.layer,
                   system_label=body.system_label, reason=body.reason.strip())
     session.add(fb)
     session.commit()

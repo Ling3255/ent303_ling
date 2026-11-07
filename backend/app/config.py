@@ -44,6 +44,21 @@ class Settings:
     # 外网开关：测试时关闭，所有学术接口返回“查询失败”
     network_enabled: bool = field(default_factory=lambda: _bool("NETWORK_ENABLED", True))
 
+    # 学生账号：学校邮箱验证码登录，免费版每月 monthly_quota 次
+    auth_required: bool = field(default_factory=lambda: _bool("AUTH_REQUIRED", False))
+    allowed_email_domains: list[str] = field(default_factory=lambda: [
+        d.strip().lower() for d in os.getenv("ALLOWED_EMAIL_DOMAINS", "xjtlu.edu.cn,student.xjtlu.edu.cn").split(",") if d.strip()
+    ])
+    monthly_quota: int = field(default_factory=lambda: int(os.getenv("MONTHLY_QUOTA", "20")))
+    session_days: int = field(default_factory=lambda: int(os.getenv("SESSION_DAYS", "30")))
+    smtp_host: str = field(default_factory=lambda: os.getenv("SMTP_HOST", ""))
+    smtp_port: int = field(default_factory=lambda: int(os.getenv("SMTP_PORT", "465")))
+    smtp_user: str = field(default_factory=lambda: os.getenv("SMTP_USER", ""))
+    smtp_password: str = field(default_factory=lambda: os.getenv("SMTP_PASSWORD", ""))
+    smtp_from: str = field(default_factory=lambda: os.getenv("SMTP_FROM", os.getenv("SMTP_USER", "")))
+    # 没配 SMTP 时把验证码直接返回给前端，方便开发和内部测试；正式上线必须关掉
+    dev_show_code: bool = field(default_factory=lambda: _bool("DEV_SHOW_CODE", True))
+
     cors_origins: list[str] = field(
         default_factory=lambda: [o for o in os.getenv("CORS_ORIGINS", "http://localhost:5173").split(",") if o]
     )

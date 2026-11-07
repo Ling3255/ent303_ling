@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { authorLine } from "../labels.js";
+import { useAuth } from "../auth.jsx";
 
 const MAX_CHARS = 1500;
 const MAX_PAPERS = 5;
@@ -21,6 +22,8 @@ export default function NewCheck() {
   const [error, setError] = useState("");
   const [health, setHealth] = useState(null);
   const fileInput = useRef(null);
+  const { user, config, openLogin, refresh } = useAuth();
+  const needLogin = config?.required && !user;
 
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth({ ok: false }));
@@ -46,6 +49,7 @@ export default function NewCheck() {
     try {
       return await fn();
     } catch (e) {
+      if (e.status === 401) openLogin();
       setError(e.message);
       return null;
     } finally {
@@ -79,6 +83,7 @@ export default function NewCheck() {
   }
 
   async function onStart() {
+    if (needLogin) return openLogin();
     const result = await run("start", () =>
       api.createCheck({
         text,
@@ -86,7 +91,10 @@ export default function NewCheck() {
         sentences: sentences.map((s) => ({ idx: s.idx, selected: s.selected })),
       }),
     );
-    if (result) navigate(`/checks/${result.id}`);
+    if (result) {
+      refresh();
+      navigate(`/checks/${result.id}`);
+    }
   }
 
   async function onExample() {
@@ -242,8 +250,13 @@ export default function NewCheck() {
                 ? "至少需要一篇已读取全文的论文。"
                 : `将检查 ${selectedCount} 句，对照 ${readyPapers.length} 篇论文。`}
         </span>
+        {user?.quota && (
+          <span className="hint">
+            本月剩余 {Math.max(0, user.quota - user.used)} 次
+          </span>
+        )}
         <button className="primary" onClick={onStart} disabled={!canStart || busy === "start"}>
-          开始检查
+          {needLogin ? "登录后开始检查" : "开始检查"}
         </button>
       </div>
     </div>

@@ -1,4 +1,4 @@
-"""数据库表：论文（含解析结果与来源检查）、条件缓存、检查记录、用户反馈。
+"""数据库表：论文（含解析结果与来源检查）、条件缓存、检查记录、用户反馈、学生账号。
 
 开发时默认用 SQLite；部署时把 DATABASE_URL 指向 PostgreSQL 即可，表结构相同。
 """
@@ -70,10 +70,41 @@ class ConditionCache(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    plan: Mapped[str] = mapped_column(String(20), default="free")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class LoginCode(Base):
+    __tablename__ = "login_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), index=True)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    used: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class UserSession(Base):
+    __tablename__ = "sessions"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Check(Base):
     __tablename__ = "checks"
 
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uuid)
+    user_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"), index=True)
     text: Mapped[str] = mapped_column(Text)
     sentences: Mapped[list] = mapped_column(JSON)
     paper_ids: Mapped[list] = mapped_column(JSON)
@@ -92,6 +123,7 @@ class Feedback(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     check_id: Mapped[str] = mapped_column(ForeignKey("checks.id"), index=True)
+    user_id: Mapped[Optional[str]] = mapped_column(ForeignKey("users.id"))
     sentence_idx: Mapped[int] = mapped_column(Integer)
     # source / support / comparability
     layer: Mapped[str] = mapped_column(String(20))

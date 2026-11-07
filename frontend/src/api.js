@@ -1,8 +1,23 @@
 // 前端只和后端通信；所有处理都在后端完成。
 const BASE = import.meta.env.VITE_API_BASE || "";
 
+const TOKEN_KEY = "citecheck_token";
+export const tokenStore = {
+  get: () => localStorage.getItem(TOKEN_KEY),
+  set: (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY)),
+};
+
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
+}
+
 async function request(path, options = {}) {
-  const res = await fetch(`${BASE}${path}`, options);
+  const token = tokenStore.get();
+  const headers = { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+  const res = await fetch(`${BASE}${path}`, { ...options, headers });
   let body = null;
   try {
     body = await res.json();
@@ -12,7 +27,7 @@ async function request(path, options = {}) {
   if (!res.ok) {
     const detail = body?.detail;
     const message = typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((d) => d.msg).join("；") : `请求失败（${res.status}）`;
-    throw new Error(message);
+    throw new ApiError(message, res.status);
   }
   return body;
 }
@@ -25,6 +40,11 @@ const json = (method, data) => ({
 
 export const api = {
   health: () => request("/api/health"),
+  requestCode: (email) => request("/api/auth/request-code", json("POST", { email })),
+  verify: (email, code) => request("/api/auth/verify", json("POST", { email, code })),
+  logout: () => request("/api/auth/logout", { method: "POST" }),
+  me: () => request("/api/me"),
+  myChecks: () => request("/api/me/checks"),
   split: (text) => request("/api/split", json("POST", { text })),
   addIdentifier: (identifier) => request("/api/papers/identifier", json("POST", { identifier })),
   upload: (file) => {

@@ -54,7 +54,8 @@ backend/
     main.py              接口（/api/split、/api/papers、/api/checks …）
     services.py          论文入库（后台线程）、上传文件 7 天清理
     llm.py               大模型封装（OpenAI 兼容，DeepSeek / 通义千问只改环境变量）
-    db.py                数据表：papers、condition_cache、checks、feedback
+    db.py                数据表：papers、condition_cache、checks、feedback、users、sessions
+    auth.py              学校邮箱验证码登录、每月次数上限
     pipeline/
       papers.py          第 1 步 读取论文：找开放全文，GROBID / pypdf 解析成带页码的段落
       sources.py         第 2 步 核对来源：Crossref、OpenAlex、arXiv、DBLP
@@ -74,6 +75,8 @@ frontend/
   src/pages/Report.jsx       报告页：进度、逐句颜色、三层结果
   src/components/PdfViewer.jsx  PDF.js 预览，跳页并高亮原文
   src/pages/PrintReport.jsx  一页证据单（浏览器打印存为 PDF）
+  src/pages/History.jsx      我的检查记录
+  src/auth.jsx               登录状态；components/LoginModal.jsx 登录框
 ```
 
 ## 怎么改规则（给研究组）
@@ -95,9 +98,15 @@ python -m eval.run_eval sources eval/data/sources_sample.jsonl                  
 
 ## 已实现 / 未实现
 
-已实现（P0 全部 + 部分 P1）：文字输入与拆句、PDF / DOI / arXiv 论文输入、①②③ 三层检查、报告页、跳转 PDF 并高亮、导出证据单、“不同意”反馈入库、条件缓存、上传文件 7 天自动删除。
+已实现（P0 + P1 全部）：文字输入与拆句、PDF / DOI / arXiv 论文输入、①②③ 三层检查、报告页、跳转 PDF 并高亮、导出证据单、“不同意”反馈入库、条件缓存、上传文件 7 天自动删除、学生账号（学校邮箱验证码登录、免费版每月 20 次、我的检查记录）。
 
-还没做：学生账号与每月次数上限（P1）、浏览器插件和 Zotero 插件（P2）。
+还没做（P2，第二版）：浏览器插件、Zotero 插件、图书馆管理后台、其他学科规则。
+
+### 学生账号
+
+- 默认 `AUTH_REQUIRED=0`：不登录也能检查，登录后才计次数，方便内部测试。试点上线时设为 `1`。
+- 登录方式：学校邮箱（`ALLOWED_EMAIL_DOMAINS`）收 6 位验证码。没配置 `SMTP_*` 时验证码会直接显示在登录框里——**正式上线前务必配置 SMTP 并设置 `DEV_SHOW_CODE=0`**。
+- 只收集邮箱。
 
 已知限制：
 - 规则模式（不配大模型）只能核对含数字的论断，条件抽取较粗，仅用于开发和演示。

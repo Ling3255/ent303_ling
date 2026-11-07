@@ -62,6 +62,10 @@ input:focus, textarea:focus { outline: 2px solid var(--blue-bg); border-color: v
   background: var(--brand); color: #fff; font-size: 16px; margin-right: 4px;
 }
 .tagline { color: var(--muted); font-size: 14px; }
+.account { margin-left: auto; display: flex; gap: 12px; align-items: center; font-size: 14px; }
+.modal.login { width: min(420px, 94vw); height: auto; padding: 22px 24px; }
+.modal.login form { display: flex; flex-direction: column; gap: 10px; }
+.dev-code { color: var(--yellow); font-weight: 600; }
 main { flex: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: 24px 28px; }
 .footer { text-align: center; color: var(--muted); font-size: 12px; padding: 16px; }
 
@@ -200,6 +204,7 @@ main { flex: 1; width: 100%; max-width: 1280px; margin: 0 auto; padding: 24px 28
 .pdf-highlight { position: absolute; background: rgba(255, 214, 0, 0.35); outline: 2px solid rgba(230, 160, 0, 0.9); pointer-events: none; }
 
 @media (max-width: 900px) {
+  .tagline { display: none; }
   .columns { grid-template-columns: 1fr; }
   .text-pane { position: static; }
   .paper-inputs { flex-direction: column; align-items: stretch; }
