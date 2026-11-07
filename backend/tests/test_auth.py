@@ -43,3 +43,9 @@ def test_login_and_quota(monkeypatch):
 
     client.post("/api/auth/logout", headers=headers)
     assert client.get("/api/me", headers=headers).status_code == 401
+
+
+def test_errors_are_bilingual():
+    client = TestClient(app)
+    detail = client.post("/api/split", json={"text": "字" * 1501}).json()["detail"]
+    assert "1500" in detail["zh"] and "characters" in detail["en"]

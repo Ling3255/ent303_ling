@@ -11,6 +11,7 @@ import httpx
 from rapidfuzz import fuzz
 
 from ..config import settings
+from ..i18n import L
 
 log = logging.getLogger(__name__)
 
@@ -20,10 +21,10 @@ DOI_RE = re.compile(r"(10\.\d{4,9}/[^\s\"<>]+)", re.I)
 ATOM = {"a": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
 
 SOURCE_LABELS = {
-    "published": "存在",
-    "preprint": "预印本",
-    "not_found": "找不到",
-    "unknown": "查询失败",
+    "published": L("存在", "Exists"),
+    "preprint": L("预印本", "Preprint"),
+    "not_found": L("找不到", "Not found"),
+    "unknown": L("查询失败", "Lookup failed"),
 }
 
 
@@ -47,7 +48,7 @@ class SourceResult:
     checked: dict = field(default_factory=dict)  # 每个接口：found / not_found / error
 
     @property
-    def label(self) -> str:
+    def label(self) -> dict:
         return SOURCE_LABELS[self.status]
 
 

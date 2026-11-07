@@ -6,89 +6,117 @@
 #   minor = 有差异但通常不影响（黄）
 #   unknown = 原文没写明，无法确认（黄）
 # 程序从不输出“可以放心比较”，最好的结果也只是“未发现条件差异”。
+#
+# 每段文字都有英文版（*_en），界面切到英文时显示。改中文时请顺手改英文；没写英文就显示中文。
 
 fields:
   dataset:
     label: 数据集
+    label_en: Dataset
     differ: major
     reason: 两个结果不是在同一个数据集上测的，数字不能直接比较。
+    reason_en: The two results were not measured on the same dataset, so the numbers are not directly comparable.
   split:
     label: 数据划分
+    label_en: Split
     differ: major
     reason: 同一数据集的不同划分难度不同（例如 test-clean 和 test-other），数字不能直接比较。
+    reason_en: Different splits of the same dataset differ in difficulty (e.g. test-clean vs test-other), so the numbers are not directly comparable.
   metric:
     label: 指标
+    label_en: Metric
     differ: major
     reason: 两个结果用的指标不同，数字含义不同。
+    reason_en: The two results use different metrics, so the numbers mean different things.
   baseline:
     label: 基线 / 模型配置
+    label_en: Baseline / model config
     differ: minor
     reason: 对照的基线或模型配置不同，比较时需要说明。
+    reason_en: The baseline or model configuration differs; mention this when comparing.
   environment:
     label: 测试环境
+    label_en: Evaluation setup
     differ: minor
     reason: 硬件或运行环境不同，通常不影响准确率类指标。
+    reason_en: Hardware or runtime setup differs; this usually does not affect accuracy-type metrics.
 
 # 某些差异虽然落在“次要”字段里，却会直接改变结论。
 # 规则：在 fields 列出的字段里查找各类别的关键词，两个结果落在不同类别时按 severity 分级。
 markers:
   - name: 训练方式
+    name_en: Training regime
     fields: [environment, baseline, dataset]
     severity: major
     reason: 一方是零样本测试，另一方在同分布的训练集上微调过；数字接近不代表能力相当。
+    reason_en: One result is zero-shot while the other was fine-tuned on in-distribution training data; similar numbers do not mean similar ability.
     # 一方写明了训练方式、另一方没写时，也要提示（至少标黄）
     flag_if_one_sided: true
     one_sided_reason: 一方原文写明是“{known}”，另一方没有写训练方式；如果另一方在该数据集的训练集上训练过，两个数字不能直接比较。
+    one_sided_reason_en: One paper states “{known}”, the other does not state its training regime; if the other model was trained on this dataset's training set, the numbers are not directly comparable.
     categories:
       zero-shot: ["zero-shot", "zero shot", "零样本", "without fine-tuning", "without any fine-tuning", "no fine-tuning", "未微调", "out-of-distribution", "never see", "without using any of the training data"]
       fine-tuned: ["fine-tuned", "finetuned", "fine-tuning on", "微调", "trained on librispeech", "supervised on", "in-distribution", "labeled librispeech", "supervised librispeech", "librispeech-trained", "trained on the librispeech", "960 hours of labeled", "960h", "ft-libri", "supervised librispeech model", "trained on librispeech", "partly trained on librispeech"]
 
   - name: 语言模型
+    name_en: Language model
     fields: [baseline, environment]
     severity: major
     reason: 一方解码时使用了外部语言模型，另一方没有；语言模型通常能明显降低 WER。
+    reason_en: One result decodes with an external language model and the other does not; an LM usually lowers WER noticeably.
     categories:
       with-lm: ["with lm", "with a language model", "+ lm", "+lm", "4-gram", "transformer lm", "使用语言模型", "lm fusion", "shallow fusion"]
       no-lm: ["no lm", "without lm", "w/o lm", "without a language model", "不使用语言模型", "无语言模型"]
 
   - name: 文本归一化
+    name_en: Text normalization
     fields: [environment, metric, baseline]
     severity: minor
     reason: WER 前的文本归一化方式不同，数字会有小幅差异。
+    reason_en: Text normalization before WER differs, which shifts the numbers slightly.
     categories:
       whisper-normalizer: ["whisper normalizer", "our text normalizer", "text normalization", "normalized transcript"]
       raw-transcript: ["unnormalized", "raw transcript", "without normalization"]
 
   - name: 测试时增强
+    name_en: Test-time augmentation
     fields: [environment, baseline]
     severity: major
     reason: 一方测试时用了多裁剪 / 测试时增强，另一方是单裁剪，top-1 通常相差 1% 左右。
+    reason_en: One result uses multi-crop / test-time augmentation and the other single-crop; top-1 typically differs by about 1%.
     categories:
       multi-crop: ["multi-crop", "10-crop", "144-crop", "test-time augmentation", "tta", "多裁剪"]
       single-crop: ["single-crop", "single crop", "center crop", "centre crop", "单裁剪"]
 
   - name: 预训练数据
+    name_en: Pre-training data
     fields: [environment, baseline, dataset]
     severity: minor
     reason: 两个模型预训练用的数据规模不同，比较时需要说明。
+    reason_en: The models were pre-trained on different amounts of data; mention this when comparing.
     categories:
       extra-data: ["jft", "imagenet-21k", "imagenet-22k", "in-21k", "laion", "extra data", "额外数据"]
       in1k-only: ["imagenet-1k only", "trained from scratch on imagenet", "no extra data", "without extra data"]
 
   - name: 检索设置
+    name_en: Retrieval setting
     fields: [environment, baseline, split]
     severity: major
     reason: 一方直接给模型正确段落（oracle），另一方需要自己检索；前者分数天然更高。
+    reason_en: One result gives the model the gold (oracle) passages while the other must retrieve them; the former naturally scores higher.
     flag_if_one_sided: true
     one_sided_reason: 一方原文写明是“{known}”设置，另一方没有写段落从哪里来；oracle 段落和检索段落的分数不能直接比较。
+    one_sided_reason_en: One paper states a “{known}” setting, the other does not say where its passages come from; oracle and retrieved-passage scores are not directly comparable.
     categories:
       oracle: ["oracle", "gold passage", "gold context", "gold document", "给定正确段落", "ground-truth passage"]
       retrieved: ["retrieved passages", "top-k retrieval", "bm25", "dense retrieval", "dpr", "检索到的段落", "retriever"]
 
   - name: 硬件
+    name_en: Hardware
     fields: [environment]
     severity: minor
     reason: 硬件不同，只影响速度类指标，通常不影响准确率。
+    reason_en: Different hardware only affects speed metrics and usually not accuracy.
     categories:
       gpu-a100: ["a100"]
       gpu-v100: ["v100"]

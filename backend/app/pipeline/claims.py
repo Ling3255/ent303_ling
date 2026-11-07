@@ -100,7 +100,7 @@ def _norm_num(v: str) -> str:
 # ---------------- 规则兜底 ----------------
 _NAME = re.compile(
     r"(?<![A-Za-z0-9\-])"
-    r"([A-Za-z][A-Za-z0-9\-]*(?:[ ](?:\d+(?:\.\d+)?(?![\d%])|[Ll]arge|[Bb]ase|[Ss]mall|[Mm]edium|[Tt]iny)(?:-v\d)?)?)"
+    r"([A-Za-z][A-Za-z0-9\-]*(?:[ ](?:\d+(?:\.\d+)?(?![\d%]|\.\d)|[Ll]arge|[Bb]ase|[Ss]mall|[Mm]edium|[Tt]iny)(?:-v\d)?)?)"
 )
 _NOT_NAMES = {
     "the", "a", "an", "and", "or", "on", "in", "of", "to", "is", "are", "was", "with", "than", "both", "we", "our",

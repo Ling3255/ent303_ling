@@ -41,6 +41,8 @@ def test_vocab_normalizes_aliases():
 
 def test_subjects():
     assert find_subjects("Whisper 和 wav2vec 2.0 在 LibriSpeech 上都是 2.7%") == ["Whisper", "wav2vec 2.0"]
+    # 英文句子：不能把 "reach 2"（来自 2.7%）当成模型名
+    assert find_subjects("Whisper and wav2vec 2.0 both reach 2.7% on LibriSpeech") == ["Whisper", "wav2vec 2.0"]
 
 
 def test_parse_identifier():
@@ -87,7 +89,7 @@ def test_zero_shot_vs_finetuned_is_major_even_in_minor_field():
            environment="fine-tuned on 960h labeled LibriSpeech"),
     )
     env = {f["field"]: f for f in out["fields"]}["environment"]
-    assert env["severity"] == "major" and env["markers"][0]["name"] == "训练方式"
+    assert env["severity"] == "major" and env["markers"][0]["name"]["zh"] == "训练方式"
     assert out["level"] == "major"
 
 
@@ -128,3 +130,15 @@ def test_number_match_ignores_dataset_names():
 
     assert number_hits("CommonVoice5.1 Fleurs.en_us", ["5.1%"]) == []
     assert number_hits("Common Voice | 29.9 | 5.1 | 69.9", ["5.1%"]) == ["5.1%"]
+
+
+def test_every_rule_text_has_english():
+    from app.pipeline.comparability import load_rules
+
+    rules = load_rules()
+    for name, spec in rules["fields"].items():
+        assert spec.get("label_en") and spec.get("reason_en"), name
+    for marker in rules["markers"]:
+        assert marker.get("name_en") and marker.get("reason_en"), marker["name"]
+        if marker.get("flag_if_one_sided"):
+            assert "{known}" in marker["one_sided_reason_en"], marker["name"]

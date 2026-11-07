@@ -79,8 +79,13 @@ input:focus, textarea:focus { outline: none; border-color: var(--brand); box-sha
 .nav a { color: var(--text-2); padding: 6px 10px; border-radius: 6px; font-size: 14px; white-space: nowrap; }
 .nav a:hover { background: var(--line-2); }
 .nav a.active { color: var(--brand); background: var(--brand-bg); font-weight: 600; }
-.account { margin-left: auto; display: flex; gap: 10px; align-items: center; font-size: 13px; min-width: 0; }
-.topbar-inner > .ghost { margin-left: auto; }
+.topbar-right { margin-left: auto; display: flex; gap: 12px; align-items: center; min-width: 0; }
+.account { display: flex; gap: 10px; align-items: center; font-size: 13px; min-width: 0; }
+.label-short { display: none; }
+.lang-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; padding: 2px; background: #fff; flex-shrink: 0; }
+.lang-toggle button { border: none; background: none; padding: 3px 9px; font-size: 12px; font-weight: 600; color: var(--muted); border-radius: 6px; }
+.lang-toggle button:hover:not(:disabled) { background: var(--line-2); }
+.lang-toggle button.on { background: var(--brand); color: #fff; }
 .account .email { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
 .quota { background: var(--brand-bg); color: var(--brand); border-radius: 10px; padding: 1px 8px; font-weight: 600; white-space: nowrap; }
 main { flex: 1; width: 100%; max-width: 1320px; margin: 0 auto; padding: 24px; }
@@ -356,7 +361,10 @@ main { flex: 1; width: 100%; max-width: 1320px; margin: 0 auto; padding: 24px; }
   main { padding: 14px; }
   .topbar-inner { padding: 8px 14px; gap: 12px; }
   .brand span:last-child { display: none; }
-  .account .email { display: none; }
+  .account .email, .account .quota { display: none; }
+  .topbar-right { gap: 8px; }
+  .label-long { display: none; }
+  .label-short { display: inline; }
   .nav a { padding: 6px 8px; }
   .hero h1 { font-size: 22px; }
   .layer-intro { grid-template-columns: 1fr; }

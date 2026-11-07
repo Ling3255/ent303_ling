@@ -39,17 +39,18 @@ def test_whisper_example_end_to_end(whisper_paragraphs, monkeypatch):
     first, second = data["report"]["sentences"]
     assert second["color"] == "none"
 
-    assert first["source"]["items"][0]["label"] == "存在"
-    assert first["support"]["label"] == "原文支持"
+    assert first["source"]["items"][0]["label"] == {"zh": "存在", "en": "Exists"}
+    assert first["support"]["label"] == {"zh": "原文支持", "en": "Supported"}
     evidence = first["support"]["results"][0]["evidence"][0]
     assert evidence["page"] == 7 and "2.7" in evidence["quote"]
 
     comp = first["comparability"]
     assert comp["level"] == "major"
     env = {f["field"]: f for f in comp["pairs"][0]["fields"]}["environment"]
-    assert env["markers"] and env["markers"][0]["name"] == "训练方式"
+    assert env["markers"] and env["markers"][0]["name"]["en"] == "Training regime"
     assert first["color"] == "red"
-    assert "请核对原文" in data["report"]["disclaimer"]
+    assert "请核对原文" in data["report"]["disclaimer"]["zh"]
+    assert "check the original papers" in data["report"]["disclaimer"]["en"]
 
     fb = client.post(f"/api/checks/{check_id}/feedback",
                      json={"sentence_idx": 0, "layer": "comparability", "system_label": "major", "reason": "我觉得可以比"})
@@ -70,7 +71,7 @@ def test_number_mismatch(whisper_paragraphs):
     with SessionLocal() as session:
         report = session.get(Check, check_id).report
     sentence = report["sentences"][0]
-    assert sentence["support"]["label"] == "数字不一致"
+    assert sentence["support"]["label"]["en"] == "Number mismatch"
     assert sentence["color"] == "red"
 
 

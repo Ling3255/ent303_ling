@@ -12,6 +12,7 @@ import re
 from typing import Optional
 
 from .. import llm
+from ..i18n import L
 from ..config import settings
 from .claims import FIELDS
 from .comparability import load_rules
@@ -22,12 +23,12 @@ from .vocab import find_terms
 log = logging.getLogger(__name__)
 
 SUPPORT_LABELS = {
-    "supported": "原文支持",
-    "not_found": "原文没有",
-    "contradicted": "说法相反",
-    "number_mismatch": "数字不一致",
+    "supported": L("原文支持", "Supported"),
+    "not_found": L("原文没有", "Not found in paper"),
+    "contradicted": L("说法相反", "Contradicted"),
+    "number_mismatch": L("数字不一致", "Number mismatch"),
 }
-PROMPT_VERSION = "v3"  # 改提示词时加一，旧的条件缓存自动失效
+PROMPT_VERSION = "v4"  # 改提示词时加一，旧的条件缓存自动失效
 
 SUPPORT_SYSTEM = """你是 CiteCheck 的原文核对模块。给你一条论断和同一篇论文中检索出的候选段落（含表格）。
 任务一：判断论文是否支持这条论断。
@@ -51,9 +52,9 @@ SUPPORT_SYSTEM = """你是 CiteCheck 的原文核对模块。给你一条论断�
 - 每个字段的 quote 必须从候选段落中逐字复制（英文原文，不要翻译、不要改写、不要拼接）。
 - 找不到原句支持的字段，value 和 quote 都填 null。绝对不要凭常识补。
 - evidence 列出支撑结论的段落编号和逐字原句，最多 3 条。
-- explanation 用中文一句话说明判断理由。
+- explanation 用中文一句话说明判断理由；explanation_en 是同一句话的英文。
 只输出 JSON：
-{"verdict":"supported","paper_value":"2.7","explanation":"……",
+{"verdict":"supported","paper_value":"2.7","explanation":"……","explanation_en":"……",
  "evidence":[{"paragraph_id":"p12","quote":"……"}],
  "conditions":{"dataset":{"value":"LibriSpeech","quote":"……"},"split":{"value":null,"quote":null},
    "metric":{"value":"WER","quote":"……"},"baseline":{"value":null,"quote":null},"environment":{"value":"zero-shot","quote":"……"}}}"""
@@ -68,7 +69,7 @@ def claim_hash(claim: dict) -> str:
 def judge(claim: dict, candidates: list[dict], all_paragraphs: list[dict]) -> tuple[dict, str]:
     """返回 (结果, engine)。结果字段：verdict, label, explanation, paper_value, evidence, conditions。"""
     if not candidates:
-        return _finalize({"verdict": "not_found", "explanation": "论文中没有检索到相关段落。"}, [], all_paragraphs), "rules"
+        return _finalize({"verdict": "not_found", "explanation": L("论文中没有检索到相关段落。", "No relevant passage was found in the paper.")}, [], all_paragraphs), "rules"
     if settings.llm_enabled:
         try:
             raw = _judge_llm(claim, candidates)
@@ -102,9 +103,9 @@ def _finalize(raw: dict, candidates: list[dict], all_paragraphs: list[dict]) -> 
         if para:
             evidence.append(_evidence(para, ev["quote"]))
         else:
-            notes.append("有一条模型给出的原句在论文中找不到，已丢弃。")
+            notes.append(L("有一条模型给出的原句在论文中找不到，已丢弃。", "A quote given by the model was not found in the paper and was discarded."))
     if verdict != "not_found" and not evidence:
-        notes.append("没有能在论文中核实的原句，结论改为“原文没有”。")
+        notes.append(L("没有能在论文中核实的原句，结论改为“原文没有”。", "No quote could be verified in the paper, so the verdict was changed to “Not found in paper”."))
         verdict = "not_found"
 
     conditions = {}
@@ -120,18 +121,25 @@ def _finalize(raw: dict, candidates: list[dict], all_paragraphs: list[dict]) -> 
             if para else {"value": None, "quote": None, "paragraph_id": None, "page": None}
         )
     if dropped:
-        notes.append(f"{len(dropped)} 个条件字段的原句无法在论文中找到，已置空。")
+        notes.append(L(f"{len(dropped)} 个条件字段的原句无法在论文中找到，已置空。", f"{len(dropped)} condition field(s) had quotes not found in the paper and were cleared."))
 
     return {
         "verdict": verdict,
         "label": SUPPORT_LABELS[verdict],
-        "explanation": raw.get("explanation") or "",
+        "explanation": _explanation(raw),
         "paper_value": raw.get("paper_value"),
         "evidence": evidence,
         "conditions": conditions,
         "notes": notes,
         "candidates": [{"paragraph_id": p["id"], "page": p.get("page"), "score": p.get("score")} for p in candidates],
     }
+
+
+def _explanation(raw: dict):
+    value = raw.get("explanation") or ""
+    if isinstance(value, dict):
+        return value
+    return L(value, raw.get("explanation_en") or value)
 
 
 def _evidence(para: dict, quote: str) -> dict:
@@ -163,7 +171,8 @@ def _judge_rules(claim: dict, candidates: list[dict], all_paragraphs: list[dict]
     subject = claim.get("subject")
     if not values:
         return {"verdict": "not_found",
-                "explanation": "未配置大模型，规则模式只能核对含数字的论断；请人工查看下方候选段落。"}
+                "explanation": L("未配置大模型，规则模式只能核对含数字的论断；请人工查看下方候选段落。",
+                                 "No LLM configured: rule mode can only check claims with numbers. Please review the candidate passages manually.")}
 
     for p in candidates:
         if len(number_hits(p["text"], values)) == len(values) and _mentions(p["text"], subject):
@@ -173,7 +182,8 @@ def _judge_rules(claim: dict, candidates: list[dict], all_paragraphs: list[dict]
             return {
                 "verdict": "supported",
                 "paper_value": values[0].rstrip("%"),
-                "explanation": f"在第 {p.get('page') or '?'} 页找到包含数字 {', '.join(values)} 的原文（规则匹配，未经大模型确认）。",
+                "explanation": L(f"在第 {p.get('page') or '?'} 页找到包含数字 {', '.join(values)} 的原文（规则匹配，未经大模型确认）。",
+                                 f"Found {', '.join(values)} on page {p.get('page') or '?'} (rule match, not confirmed by an LLM)."),
                 "evidence": [{"paragraph_id": p["id"], "quote": line.strip()}],
                 "conditions": _conditions_rules(p, line, subject, all_paragraphs),
             }
@@ -189,11 +199,12 @@ def _judge_rules(claim: dict, candidates: list[dict], all_paragraphs: list[dict]
                 if claim_terms & row_terms:
                     return {
                         "verdict": "number_mismatch",
-                        "explanation": "表格中这个模型的结果与文字中的数字不同（规则匹配，请核对）。",
+                        "explanation": L("表格中这个模型的结果与文字中的数字不同（规则匹配，请核对）。",
+                                         "The table reports a different number for this model (rule match, please verify)."),
                         "evidence": [{"paragraph_id": p["id"], "quote": shorten(row, subject.split()[0])}],
                         "conditions": _conditions_rules(p, row, subject, all_paragraphs),
                     }
-    return {"verdict": "not_found", "explanation": "候选段落中没有找到文字里的数字。"}
+    return {"verdict": "not_found", "explanation": L("候选段落中没有找到文字里的数字。", "The number in the text was not found in the candidate passages.")}
 
 
 def _conditions_rules(para: dict, line: str, subject: Optional[str], all_paragraphs: list[dict]) -> dict:

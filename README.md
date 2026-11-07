@@ -79,10 +79,19 @@ frontend/
   src/auth.jsx               登录状态；components/LoginModal.jsx 登录框
 ```
 
+## 界面语言（中文 / English）
+
+右上角的“中 / EN”按钮切换界面语言，选择保存在浏览器里。
+
+- 前端的固定文字在 `frontend/src/i18n.jsx` 的 `zh` / `en` 两个字典里，新增文字时两边都要加同一个 key。
+- 后端返回给前端的提示（报告里的标签、理由、提示、错误信息）都是 `{"zh": ..., "en": ...}`，前端按当前语言显示，所以已生成的报告也能随时切换。
+- 大模型的解释同时要求输出中文和英文（`explanation` / `explanation_en`）。
+
 ## 怎么改规则（给研究组）
 
 - **可比规则**：`backend/app/rules/comparability.yaml`。`fields` 定义五个字段不一致时的默认等级；`markers` 定义“落在次要字段里、却会改变结论”的关键差异，例如零样本 vs 微调、有无语言模型、单裁剪 vs 多裁剪、oracle 段落 vs 检索段落。每条规则写明关键词和理由，理由会原样显示在报告里。
 - **词表**：`backend/app/rules/benchmarks.yaml`。新增数据集、划分、指标的写法，系统就会把它们当成同一个东西（例如 `ILSVRC-2012` = `ImageNet-1k`）。
+- 每段理由都有英文版（`reason_en`、`name_en` 等），界面切到英文时显示。改中文时请顺手改英文；有测试检查每条规则都写了英文。
 - 改完运行 `cd backend && pytest -q`，确认没有把已有例子改坏。
 
 ## 测试与评测

@@ -3,23 +3,21 @@ import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { authorLine } from "../labels.js";
 import { useAuth } from "../auth.jsx";
+import { useI18n } from "../i18n.jsx";
 
 const MAX_CHARS = 1500;
 const MAX_PAPERS = 5;
-const EXAMPLE_TEXT =
-  "Whisper 和 wav2vec 2.0 在 LibriSpeech 上都是 2.7%，所以准确率差不多。Whisper 是 OpenAI 在 2022 年提出的语音识别模型。";
+const EXAMPLE_TEXT = {
+  zh: "Whisper 和 wav2vec 2.0 在 LibriSpeech 上都是 2.7%，所以准确率差不多。Whisper 是 OpenAI 在 2022 年提出的语音识别模型。",
+  en: "Whisper and wav2vec 2.0 both reach 2.7% on LibriSpeech, so their accuracy is about the same. Whisper is a speech recognition model proposed by OpenAI in 2022.",
+};
 const EXAMPLE_PAPER = "arXiv:2212.04356";
 
 const SOURCE_CLASS = { published: "green", preprint: "yellow", not_found: "red", unknown: "yellow" };
 
-const LAYERS = [
-  { n: "①", title: "来源", text: "论文存在吗？正式发表还是预印本？" },
-  { n: "②", title: "支持", text: "这句话的说法和数字，原文里有没有？" },
-  { n: "③", title: "可比", text: "放在一起比较的两个结果，是同条件测的吗？", core: true },
-];
-
 export default function NewCheck() {
   const navigate = useNavigate();
+  const { t, tx, lang } = useI18n();
   const [text, setText] = useState("");
   const [papers, setPapers] = useState([]);
   const [identifier, setIdentifier] = useState("");
@@ -80,7 +78,7 @@ export default function NewCheck() {
     for (const file of Array.from(files || [])) {
       if (count >= MAX_PAPERS) break;
       if (file.type && file.type !== "application/pdf") {
-        setError(`${file.name} 不是 PDF。`);
+        setError(t("home.notPdf", { name: file.name }));
         continue;
       }
       const paper = await run("paper", () => api.upload(file));
@@ -92,8 +90,8 @@ export default function NewCheck() {
     if (fileInput.current) fileInput.current.value = "";
   }
 
-  async function onSplit() {
-    const result = await run("split", () => api.split(text));
+  async function splitText(value) {
+    const result = await run("split", () => api.split(value));
     if (result) setSentences(result.sentences.map((s) => ({ ...s, selected: s.suggested })));
   }
 
@@ -113,12 +111,12 @@ export default function NewCheck() {
   }
 
   async function onExample() {
-    setText(EXAMPLE_TEXT);
+    const example = EXAMPLE_TEXT[lang];
+    setText(example);
     setSentences(null);
     const paper = await run("paper", () => api.addIdentifier(EXAMPLE_PAPER));
     if (paper) addPaper(paper);
-    const result = await run("split", () => api.split(EXAMPLE_TEXT));
-    if (result) setSentences(result.sentences.map((s) => ({ ...s, selected: s.suggested })));
+    await splitText(example);
   }
 
   const toggle = (idx) => setSentences((list) => list.map((x) => (x.idx === idx ? { ...x, selected: !x.selected } : x)));
@@ -131,38 +129,44 @@ export default function NewCheck() {
   const full = papers.length >= MAX_PAPERS;
 
   const steps = [
-    { label: "贴文字", done: !!text.trim() && text.length <= MAX_CHARS },
-    { label: "加论文", done: readyPapers.length > 0 && !processing },
-    { label: "确认句子", done: selectedCount > 0 },
+    { label: t("home.step1"), done: !!text.trim() && text.length <= MAX_CHARS },
+    { label: t("home.step2"), done: readyPapers.length > 0 && !processing },
+    { label: t("home.step3"), done: selectedCount > 0 },
   ];
   const blocker = !text.trim()
-    ? "先贴一段要检查的文字"
+    ? t("home.block.noText")
     : text.length > MAX_CHARS
-      ? `文字超过 ${MAX_CHARS} 字`
+      ? t("home.block.tooLong", { max: MAX_CHARS })
       : !papers.length
-        ? "再添加至少一篇论文"
+        ? t("home.block.noPaper")
         : processing
-          ? "论文还在读取中…"
+          ? t("home.block.processing")
           : !readyPapers.length
-            ? "还没有读取到全文的论文"
+            ? t("home.block.noReady")
             : !sentences
-              ? "点击“识别句子”确认要检查哪些句子"
+              ? t("home.block.noSplit")
               : !selectedCount
-                ? "至少选择一句"
+                ? t("home.block.noSelected")
                 : null;
+
+  const layers = [
+    { n: "①", title: t("home.l1.title"), text: t("home.l1.text") },
+    { n: "②", title: t("home.l2.title"), text: t("home.l2.text") },
+    { n: "③", title: t("home.l3.title"), text: t("home.l3.text"), core: true },
+  ];
 
   return (
     <div className="new-check">
       <section className="hero">
-        <h1>交给导师之前，先逐句核对一遍</h1>
-        <p>贴一段 ChatGPT / Kimi 的回答或你自己写的综述，附上所引论文，CiteCheck 逐句给出三层检查结果，每条都附原文页码。</p>
+        <h1>{t("home.hero")}</h1>
+        <p>{t("home.heroSub")}</p>
         <div className="layer-intro">
-          {LAYERS.map((l) => (
+          {layers.map((l) => (
             <div key={l.n} className={`layer-chip ${l.core ? "core" : ""}`}>
               <span className="layer-n">{l.n}</span>
               <div>
                 <strong>{l.title}</strong>
-                {l.core && <em>核心</em>}
+                {l.core && <em>{t("home.core")}</em>}
                 <div>{l.text}</div>
               </div>
             </div>
@@ -171,11 +175,7 @@ export default function NewCheck() {
       </section>
 
       {health && (!health.ok || !health.llm) && (
-        <div className="notice">
-          {health.ok === false
-            ? "连不上后端，请确认后端已启动（默认 http://localhost:8000）。"
-            : "后端未配置大模型，正在使用规则模式：只能核对含数字的论断，条件抽取较粗。"}
-        </div>
+        <div className="notice">{health.ok === false ? t("home.noBackend") : t("home.rulesMode")}</div>
       )}
 
       <div className="compose">
@@ -183,10 +183,10 @@ export default function NewCheck() {
           <section className="card step-card">
             <div className="card-head">
               <h2>
-                <StepBadge n={1} done={steps[0].done} /> 贴文字
+                <StepBadge n={1} done={steps[0].done} /> {t("home.step1")}
               </h2>
               <button className="ghost small-btn" onClick={onExample} disabled={!!busy}>
-                试试 Whisper 示例
+                {t("home.example")}
               </button>
             </div>
             <textarea
@@ -195,11 +195,11 @@ export default function NewCheck() {
                 setText(e.target.value);
                 setSentences(null);
               }}
-              placeholder="例如：Whisper 和 wav2vec 2.0 在 LibriSpeech 上都是 2.7%，所以准确率差不多。"
+              placeholder={t("home.textPlaceholder")}
               rows={6}
             />
             <div className="field-foot">
-              <span className="hint">中文、英文都可以；只检查你给出的论文，不判断观点本身对错。</span>
+              <span className="hint">{t("home.textHint")}</span>
               <span className={`counter ${text.length > MAX_CHARS ? "over" : ""}`}>
                 {text.length} / {MAX_CHARS}
               </span>
@@ -209,21 +209,19 @@ export default function NewCheck() {
           <section className="card step-card">
             <div className="card-head">
               <h2>
-                <StepBadge n={2} done={steps[1].done} /> 加论文
+                <StepBadge n={2} done={steps[1].done} /> {t("home.step2")}
               </h2>
-              <span className="hint">
-                {papers.length} / {MAX_PAPERS} 篇
-              </span>
+              <span className="hint">{t("home.paperCount", { n: papers.length, max: MAX_PAPERS })}</span>
             </div>
             <form onSubmit={onAddIdentifier} className="identifier-form">
               <input
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="DOI、arXiv 编号或论文标题，例如 arXiv:2212.04356"
+                placeholder={t("home.idPlaceholder")}
                 disabled={full}
               />
               <button type="submit" disabled={!identifier.trim() || busy === "paper" || full}>
-                添加
+                {t("home.add")}
               </button>
             </form>
             <label
@@ -249,33 +247,34 @@ export default function NewCheck() {
               />
               <span className="drop-icon">⤓</span>
               <span>
-                把 PDF 拖到这里，或<u>点击上传</u>
+                {t("home.drop")}
+                <u>{t("home.dropClick")}</u>
               </span>
-              <span className="hint">填 DOI / arXiv 时会自动找开放全文，找不到再上传</span>
+              <span className="hint">{t("home.dropHint")}</span>
             </label>
-            {busy === "paper" && <p className="hint">正在添加…</p>}
+            {busy === "paper" && <p className="hint">{t("home.adding")}</p>}
             {papers.length > 0 && (
               <ul className="paper-list">
                 {papers.map((p) => (
                   <li key={p.id} className={`paper-card ${p.fulltext_status}`}>
                     <div className="paper-main">
-                      <div className="paper-title">{p.title || "标题识别中…"}</div>
+                      <div className="paper-title">{p.title || t("home.titlePending")}</div>
                       <div className="paper-meta">
-                        {authorLine(p)} · {p.year || "年份未知"}
+                        {authorLine(p, t)} · {p.year || t("home.yearUnknown")}
                         {p.venue ? ` · ${p.venue}` : ""}
                         {p.arxiv_id ? ` · arXiv:${p.arxiv_id}` : ""}
                       </div>
                       <div className="paper-tags">
                         <PaperStatus paper={p} />
                         {p.fulltext_status !== "processing" && (
-                          <span className={`tag ${SOURCE_CLASS[p.source.status]}`}>① {p.source.label}</span>
+                          <span className={`tag ${SOURCE_CLASS[p.source.status]}`}>① {tx(p.source.label)}</span>
                         )}
                       </div>
-                      {p.warning && <div className="paper-warning">{p.warning}</div>}
+                      {p.warning && <div className="paper-warning">{tx(p.warning)}</div>}
                     </div>
                     <button
                       className="icon-btn"
-                      title="移除"
+                      title={t("home.remove")}
                       onClick={() => setPapers((l) => l.filter((x) => x.id !== p.id))}
                     >
                       ×
@@ -284,25 +283,27 @@ export default function NewCheck() {
                 ))}
               </ul>
             )}
-            {papers.length > 0 && <p className="hint">请确认识别出的标题、作者和年份无误。</p>}
+            {papers.length > 0 && <p className="hint">{t("home.confirmMeta")}</p>}
           </section>
 
           <section className="card step-card">
             <div className="card-head">
               <h2>
-                <StepBadge n={3} done={steps[2].done} /> 确认要检查的句子
+                <StepBadge n={3} done={steps[2].done} /> {t("home.step3")}
               </h2>
-              <button className={sentences ? "ghost small-btn" : "small-btn"} onClick={onSplit} disabled={!canSplit || busy === "split"}>
-                {sentences ? "重新识别" : "识别句子"}
+              <button
+                className={sentences ? "ghost small-btn" : "small-btn"}
+                onClick={() => splitText(text)}
+                disabled={!canSplit || busy === "split"}
+              >
+                {sentences ? t("home.resplit") : t("home.split")}
               </button>
             </div>
             {!sentences ? (
-              <p className="hint">系统会拆句，并默认选中含有数字、比较或引用的句子。</p>
+              <p className="hint">{t("home.splitHint")}</p>
             ) : (
               <>
-                <p className="hint">
-                  点击句子可以选中 / 取消。已选 <strong>{selectedCount}</strong> / {sentences.length} 句。
-                </p>
+                <p className="hint">{t("home.pickHint", { n: selectedCount, total: sentences.length })}</p>
                 <div className="sentence-flow">
                   {sentences.map((s) => (
                     <button
@@ -310,17 +311,23 @@ export default function NewCheck() {
                       type="button"
                       className={`pick ${s.selected ? "on" : ""}`}
                       onClick={() => toggle(s.idx)}
-                      title={[s.has_number && "含数字", s.has_comparison && "含比较", s.has_citation && "含引用"]
-                        .filter(Boolean)
-                        .join("、") || "未检测到可核对的内容"}
+                      title={
+                        [
+                          s.has_number && t("home.flagNumberTitle"),
+                          s.has_comparison && t("home.flagComparisonTitle"),
+                          s.has_citation && t("home.flagCitationTitle"),
+                        ]
+                          .filter(Boolean)
+                          .join(", ") || t("home.flagNone")
+                      }
                     >
                       <span className="pick-box">{s.selected ? "✓" : ""}</span>
                       {s.text}
                       {(s.has_number || s.has_comparison || s.has_citation) && (
                         <span className="flags">
-                          {s.has_number && <i>数字</i>}
-                          {s.has_comparison && <i>比较</i>}
-                          {s.has_citation && <i>引用</i>}
+                          {s.has_number && <i>{t("home.flagNumber")}</i>}
+                          {s.has_comparison && <i>{t("home.flagComparison")}</i>}
+                          {s.has_citation && <i>{t("home.flagCitation")}</i>}
                         </span>
                       )}
                     </button>
@@ -333,10 +340,10 @@ export default function NewCheck() {
 
         <aside className="compose-side">
           <div className="card side-card">
-            <h3>准备情况</h3>
+            <h3>{t("home.ready")}</h3>
             <ol className="checklist">
               {steps.map((s, i) => (
-                <li key={s.label} className={s.done ? "done" : ""}>
+                <li key={i} className={s.done ? "done" : ""}>
                   <span className="check-dot">{s.done ? "✓" : i + 1}</span>
                   {s.label}
                 </li>
@@ -344,12 +351,10 @@ export default function NewCheck() {
             </ol>
             {error && <div className="error">{error}</div>}
             <button className="primary block" onClick={onStart} disabled={!canStart || busy === "start"}>
-              {busy === "start" ? "正在提交…" : needLogin ? "登录后开始检查" : "开始检查"}
+              {busy === "start" ? t("home.starting") : needLogin ? t("home.loginToStart") : t("home.start")}
             </button>
-            <p className="hint center">
-              {blocker || `将检查 ${selectedCount} 句，对照 ${readyPapers.length} 篇论文，通常 1 分钟内完成`}
-            </p>
-            {user?.quota && <p className="hint center">本月剩余 {Math.max(0, user.quota - user.used)} 次</p>}
+            <p className="hint center">{blocker || t("home.willCheck", { n: selectedCount, p: readyPapers.length })}</p>
+            {user?.quota && <p className="hint center">{t("home.quotaLeft", { n: Math.max(0, user.quota - user.used) })}</p>}
           </div>
         </aside>
       </div>
@@ -361,19 +366,15 @@ function StepBadge({ n, done }) {
   return <span className={`step ${done ? "done" : ""}`}>{done ? "✓" : n}</span>;
 }
 
+const PAPER_STATUS_CLASS = { processing: "blue", ok: "green", need_upload: "yellow", failed: "red", missing: "yellow", stale: "yellow" };
+
 function PaperStatus({ paper }) {
-  const map = {
-    processing: ["blue", "读取全文中…"],
-    ok: ["green", `已读取 ${paper.n_paragraphs} 段`],
-    need_upload: ["yellow", "需要上传 PDF"],
-    failed: ["red", "读取失败"],
-    missing: ["yellow", "无全文"],
-    stale: ["yellow", "需要重新读取"],
-  };
-  const [cls, label] = map[paper.fulltext_status] || ["yellow", paper.fulltext_status];
+  const { t } = useI18n();
+  const status = paper.fulltext_status;
+  const label = PAPER_STATUS_CLASS[status] ? t(`paper.${status}`, { n: paper.n_paragraphs }) : status;
   return (
-    <span className={`tag ${cls}`}>
-      {paper.fulltext_status === "processing" && <span className="spinner" />}
+    <span className={`tag ${PAPER_STATUS_CLASS[status] || "yellow"}`}>
+      {status === "processing" && <span className="spinner" />}
       {label}
     </span>
   );

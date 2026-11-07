@@ -9,15 +9,16 @@ from typing import Optional
 
 import yaml
 
+from ..i18n import L
 from .vocab import RULES_DIR, canonical
 
 SEVERITY_ORDER = {"same": 0, "unknown": 1, "minor": 2, "major": 3}
 LEVEL_LABELS = {
-    "consistent": "条件一致",
-    "insufficient": "原文未写明部分条件",
-    "minor": "有差异但通常不影响",
-    "major": "有差异且可能影响结论",
-    "na": "不涉及比较",
+    "consistent": L("条件一致", "Conditions match"),
+    "insufficient": L("原文未写明部分条件", "Some conditions not stated"),
+    "minor": L("有差异但通常不影响", "Differs, usually minor"),
+    "major": L("有差异且可能影响结论", "Differs, may affect the conclusion"),
+    "na": L("不涉及比较", "No comparison"),
 }
 _CANONICAL_KIND = {"dataset": "dataset", "split": "split", "metric": "metric"}
 
@@ -46,6 +47,11 @@ def _field_text(cond: dict, field: str) -> str:
 def _quote(cond: dict, field: str) -> Optional[str]:
     item = cond.get(field)
     return item.get("quote") if isinstance(item, dict) else None
+
+
+def _l(spec: dict, key: str) -> dict:
+    """规则文件里的文字：key 是中文，key_en 是英文（没写英文就用中文）。"""
+    return L(spec[key], spec.get(f"{key}_en") or spec[key])
 
 
 def _page(cond: dict, field: str) -> Optional[int]:
@@ -108,17 +114,19 @@ def compare_conditions(a: dict, b: dict) -> dict:
         ca = canonical(va, kind) if kind else (va or "").strip().lower() or None
         cb = canonical(vb, kind) if kind else (vb or "").strip().lower() or None
         if not ca or not cb:
-            severity, reason = "unknown", "至少一方原文没有写明这一项，无法确认是否一致。"
+            severity, reason = "unknown", L("至少一方原文没有写明这一项，无法确认是否一致。",
+                                           "At least one paper does not state this, so it cannot be confirmed.")
         elif ca == cb:
-            severity, reason = "same", "两边一致。"
+            severity, reason = "same", L("两边一致。", "Same on both sides.")
         elif _compatible(ca, cb):
             # 例如 "clean" 和 "test-clean"：一方只是写得更简略，不能断定不同
-            severity, reason = "unknown", f"两边写法不同（{va} / {vb}），可能是同一项，请核对原文。"
+            severity, reason = "unknown", L(f"两边写法不同（{va} / {vb}），可能是同一项，请核对原文。",
+                                           f"Written differently ({va} / {vb}); possibly the same, please check the papers.")
         else:
-            severity, reason = spec["differ"], spec["reason"]
+            severity, reason = spec["differ"], _l(spec, "reason")
         fields_out.append({
             "field": field,
-            "label": spec["label"],
+            "label": _l(spec, "label"),
             "a": va, "a_quote": _quote(a, field), "a_page": _page(a, field),
             "b": vb, "b_quote": _quote(b, field), "b_page": _page(b, field),
             "severity": severity,
@@ -134,21 +142,24 @@ def compare_conditions(a: dict, b: dict) -> dict:
             # 一方明确是零样本 / oracle，另一方没写：不能当成一致，至少提示需要核对
             target = by_field[marker["fields"][0]]
             known = cat_a or cat_b
-            target["markers"].append({"name": marker["name"], "a": cat_a or "原文未写明", "b": cat_b or "原文未写明",
-                                      "reason": marker["one_sided_reason"].format(known=known)})
+            not_stated = L("原文未写明", "not stated")
+            reason = L(marker["one_sided_reason"].format(known=known),
+                       marker.get("one_sided_reason_en", marker["one_sided_reason"]).format(known=known))
+            target["markers"].append({"name": _l(marker, "name"), "a": cat_a or not_stated, "b": cat_b or not_stated,
+                                      "reason": reason})
             if SEVERITY_ORDER[target["severity"]] < SEVERITY_ORDER["minor"]:
                 target["severity"] = "minor"
-                target["reason"] = marker["one_sided_reason"].format(known=known)
+                target["reason"] = reason
             continue
         if not (cat_a and cat_b and cat_a != cat_b):
             continue
         # 记在第一个命中关键词的字段上
         target = next((by_field[f] for f in marker["fields"]
                        if _marker_category(marker, _field_text(a, f) + " " + _field_text(b, f))), by_field[marker["fields"][0]])
-        target["markers"].append({"name": marker["name"], "a": cat_a, "b": cat_b, "reason": marker["reason"]})
+        target["markers"].append({"name": _l(marker, "name"), "a": cat_a, "b": cat_b, "reason": _l(marker, "reason")})
         if target["severity"] in ("same", "unknown") or SEVERITY_ORDER[marker["severity"]] > SEVERITY_ORDER[target["severity"]]:
             target["severity"] = marker["severity"]
-            target["reason"] = marker["reason"]
+            target["reason"] = _l(marker, "reason")
 
     return {"fields": fields_out, "level": overall_level(fields_out)}
 

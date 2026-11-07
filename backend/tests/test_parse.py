@@ -92,4 +92,4 @@ def test_grobid_failure_falls_back_to_pypdf(monkeypatch):
     monkeypatch.setattr(papers, "parse_with_pypdf", lambda data: ({"title": "x"}, [{"id": "p1", "kind": "text", "section": "",
                                                                                     "text": "hello world", "page": 1, "boxes": []}]))
     header, paras, parser, warning = papers.parse_pdf(b"%PDF")
-    assert parser == "pypdf" and paras and "GROBID" in warning
+    assert parser == "pypdf" and paras and "GROBID" in warning["zh"] and "GROBID" in warning["en"]

@@ -1,4 +1,6 @@
 // 前端只和后端通信；所有处理都在后端完成。
+import { getLang, pickText } from "./i18n.jsx";
+
 const BASE = import.meta.env.VITE_API_BASE || "";
 
 const TOKEN_KEY = "citecheck_token";
@@ -26,7 +28,14 @@ async function request(path, options = {}) {
   }
   if (!res.ok) {
     const detail = body?.detail;
-    const message = typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((d) => d.msg).join("；") : `请求失败（${res.status}）`;
+    // 后端的提示是 {zh, en}；校验错误是数组
+    const message = Array.isArray(detail)
+      ? detail.map((d) => d.msg).join("; ")
+      : detail
+        ? pickText(getLang(), detail)
+        : getLang() === "zh"
+          ? `请求失败（${res.status}）`
+          : `Request failed (${res.status})`;
     throw new ApiError(message, res.status);
   }
   return body;

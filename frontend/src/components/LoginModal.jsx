@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { api } from "../api.js";
+import { useI18n } from "../i18n.jsx";
 
 export default function LoginModal({ domains, onDone, onClose }) {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [stage, setStage] = useState("email");
@@ -40,34 +42,34 @@ export default function LoginModal({ domains, onDone, onClose }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal login" onClick={(e) => e.stopPropagation()}>
-        <h2>学校邮箱登录</h2>
+        <h2>{t("login.title")}</h2>
         <p className="hint">
-          只收集邮箱，用于统计每月使用次数。{domains.length > 0 && `支持：${domains.map((d) => "@" + d).join("、")}`}
+          {t("login.hint")} {domains.length > 0 && t("login.domains", { d: domains.map((d) => "@" + d).join(", ") })}
         </p>
         {stage === "email" ? (
           <form onSubmit={send}>
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@student.xjtlu.edu.cn" autoFocus />
             <button className="primary" type="submit" disabled={busy || !email.includes("@")}>
-              发送验证码
+              {t("login.send")}
             </button>
           </form>
         ) : (
           <form onSubmit={verify}>
             <p className="hint">
-              验证码已发送到 {email}，10 分钟内有效。
+              {t("login.sent", { email })}
               {devCode && (
                 <>
                   <br />
-                  <span className="dev-code">开发模式（未配置邮件服务）验证码：{devCode}</span>
+                  <span className="dev-code">{t("login.dev", { code: devCode })}</span>
                 </>
               )}
             </p>
-            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6 位验证码" maxLength={6} autoFocus />
+            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t("login.code")} maxLength={6} autoFocus />
             <button className="primary" type="submit" disabled={busy || code.trim().length !== 6}>
-              登录
+              {t("login.submit")}
             </button>
             <button type="button" className="link" onClick={() => setStage("email")}>
-              换个邮箱
+              {t("login.change")}
             </button>
           </form>
         )}

@@ -4,27 +4,30 @@ import Report from "./pages/Report.jsx";
 import PrintReport from "./pages/PrintReport.jsx";
 import History from "./pages/History.jsx";
 import { AuthProvider, useAuth } from "./auth.jsx";
+import { LangToggle, useI18n } from "./i18n.jsx";
 
 function AccountBar() {
   const { user, openLogin, logout } = useAuth();
+  const { t } = useI18n();
   if (!user)
     return (
-      <button className="ghost small-btn" onClick={openLogin}>
-        学校邮箱登录
+      <button className="ghost small-btn" onClick={openLogin} title={t("nav.login")}>
+        <span className="label-long">{t("nav.login")}</span>
+        <span className="label-short">{t("nav.loginShort")}</span>
       </button>
     );
   return (
     <div className="account">
       {user.quota && (
-        <span className="quota" title="免费版每月次数">
-          本月 {user.used}/{user.quota}
+        <span className="quota" title={t("nav.quotaTitle")}>
+          {t("nav.quota", { used: user.used, quota: user.quota })}
         </span>
       )}
       <span className="email" title={user.email}>
         {user.email}
       </span>
       <button className="link" onClick={logout}>
-        退出
+        {t("nav.logout")}
       </button>
     </div>
   );
@@ -40,6 +43,7 @@ export default function App() {
 
 function AppRoutes() {
   const { user } = useAuth();
+  const { t } = useI18n();
   return (
     <Routes>
       <Route path="/checks/:id/print" element={<PrintReport />} />
@@ -55,11 +59,14 @@ function AppRoutes() {
                 </Link>
                 <nav className="nav">
                   <NavLink to="/" end>
-                    新的检查
+                    {t("nav.new")}
                   </NavLink>
-                  {user && <NavLink to="/history">我的记录</NavLink>}
+                  {user && <NavLink to="/history">{t("nav.history")}</NavLink>}
                 </nav>
-                <AccountBar />
+                <div className="topbar-right">
+                  <LangToggle />
+                  <AccountBar />
+                </div>
               </div>
             </header>
             <main>
@@ -69,7 +76,7 @@ function AppRoutes() {
                 <Route path="/history" element={<History />} />
               </Routes>
             </main>
-            <footer className="footer">系统只提示差异，请核对原文 · 上传的 PDF 只用于当次检查，7 天后自动删除</footer>
+            <footer className="footer">{t("footer")}</footer>
           </div>
         }
       />

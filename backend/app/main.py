@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from . import auth, services
 from .config import settings
 from .db import Check, Feedback, Paper, User, get_session, init_db
+from .i18n import L
 from .pipeline.runner import paper_summary, run_check, stage_list
 from .pipeline.sentences import split_and_flag
 
@@ -75,9 +76,10 @@ class FeedbackIn(BaseModel):
 def _check_text(text: str) -> str:
     text = text.strip()
     if not text:
-        raise HTTPException(400, "请先粘贴要检查的文字。")
+        raise HTTPException(400, L("请先粘贴要检查的文字。", "Please paste the text to check first."))
     if len(text) > settings.max_text_chars:
-        raise HTTPException(400, f"文字最多 {settings.max_text_chars} 字，当前 {len(text)} 字。")
+        raise HTTPException(400, L(f"文字最多 {settings.max_text_chars} 字，当前 {len(text)} 字。",
+                                  f"Text is limited to {settings.max_text_chars} characters (currently {len(text)})."))
     return text
 
 
@@ -115,14 +117,14 @@ def auth_logout(authorization: Optional[str] = Header(None), session: Session = 
 @app.get("/api/me")
 def me(user: Optional[User] = Depends(auth.current_user), session: Session = Depends(get_session)):
     if not user:
-        raise HTTPException(401, "未登录。")
+        raise HTTPException(401, L("未登录。", "Not logged in."))
     return auth.user_info(session, user)
 
 
 @app.get("/api/me/checks")
 def my_checks(user: Optional[User] = Depends(auth.current_user), session: Session = Depends(get_session)):
     if not user:
-        raise HTTPException(401, "未登录。")
+        raise HTTPException(401, L("未登录。", "Not logged in."))
     rows = session.scalars(select(Check).where(Check.user_id == user.id).order_by(Check.created_at.desc()).limit(50)).all()
     return [{"id": c.id, "status": c.status, "created_at": c.created_at.isoformat(), "preview": c.text[:80],
              "summary": (c.report or {}).get("summary")} for c in rows]
@@ -136,7 +138,7 @@ def split(body: SplitIn):
 @app.post("/api/papers/identifier")
 def add_paper_identifier(body: IdentifierIn, session: Session = Depends(get_session)):
     if not body.identifier.strip():
-        raise HTTPException(400, "请填写 DOI、arXiv 编号或论文标题。")
+        raise HTTPException(400, L("请填写 DOI、arXiv 编号或论文标题。", "Please enter a DOI, arXiv ID or paper title."))
     return paper_summary(services.add_by_identifier(session, body.identifier))
 
 
@@ -144,9 +146,9 @@ def add_paper_identifier(body: IdentifierIn, session: Session = Depends(get_sess
 async def add_paper_upload(file: UploadFile = File(...), session: Session = Depends(get_session)):
     data = await file.read()
     if len(data) > MAX_PDF_BYTES:
-        raise HTTPException(400, "PDF 不能超过 40 MB。")
+        raise HTTPException(400, L("PDF 不能超过 40 MB。", "PDF must be smaller than 40 MB."))
     if not data.startswith(b"%PDF"):
-        raise HTTPException(400, "上传的文件不是 PDF。")
+        raise HTTPException(400, L("上传的文件不是 PDF。", "The uploaded file is not a PDF."))
     return paper_summary(services.add_by_upload(session, data))
 
 
@@ -154,7 +156,7 @@ async def add_paper_upload(file: UploadFile = File(...), session: Session = Depe
 def get_paper(paper_id: str, session: Session = Depends(get_session)):
     paper = session.get(Paper, paper_id)
     if not paper:
-        raise HTTPException(404, "找不到这篇论文。")
+        raise HTTPException(404, L("找不到这篇论文。", "Paper not found."))
     return paper_summary(paper)
 
 
@@ -162,7 +164,8 @@ def get_paper(paper_id: str, session: Session = Depends(get_session)):
 def get_paper_pdf(paper_id: str, session: Session = Depends(get_session)):
     paper = session.get(Paper, paper_id)
     if not paper or not paper.pdf_path or not Path(paper.pdf_path).exists():
-        raise HTTPException(404, "这篇论文的 PDF 已删除或不存在（上传的文件保留 7 天）。")
+        raise HTTPException(404, L("这篇论文的 PDF 已删除或不存在（上传的文件保留 7 天）。",
+                              "The PDF has been deleted or does not exist (uploads are kept for 7 days)."))
     return FileResponse(paper.pdf_path, media_type="application/pdf")
 
 
@@ -172,12 +175,12 @@ def create_check(body: CheckIn, session: Session = Depends(get_session),
     text = _check_text(body.text)
     auth.require_quota(session, user)
     if not body.paper_ids:
-        raise HTTPException(400, "请至少添加一篇论文。")
+        raise HTTPException(400, L("请至少添加一篇论文。", "Please add at least one paper."))
     if len(body.paper_ids) > settings.max_papers:
-        raise HTTPException(400, f"每次最多 {settings.max_papers} 篇论文。")
+        raise HTTPException(400, L(f"每次最多 {settings.max_papers} 篇论文。", f"At most {settings.max_papers} papers per check."))
     for pid in body.paper_ids:
         if not session.get(Paper, pid):
-            raise HTTPException(400, f"论文 {pid} 不存在。")
+            raise HTTPException(400, L(f"论文 {pid} 不存在。", f"Paper {pid} does not exist."))
 
     sentences = split_and_flag(text)
     if body.sentences is not None:
@@ -200,7 +203,7 @@ def create_check(body: CheckIn, session: Session = Depends(get_session),
 def get_check(check_id: str, session: Session = Depends(get_session)):
     check = session.get(Check, check_id)
     if not check:
-        raise HTTPException(404, "找不到这次检查。")
+        raise HTTPException(404, L("找不到这次检查。", "Check not found."))
     return {
         "id": check.id,
         "status": check.status,
@@ -218,7 +221,7 @@ def get_check(check_id: str, session: Session = Depends(get_session)):
 def add_feedback(check_id: str, body: FeedbackIn, session: Session = Depends(get_session),
                  user: Optional[User] = Depends(auth.current_user)):
     if not session.get(Check, check_id):
-        raise HTTPException(404, "找不到这次检查。")
+        raise HTTPException(404, L("找不到这次检查。", "Check not found."))
     fb = Feedback(check_id=check_id, user_id=user.id if user else None, sentence_idx=body.sentence_idx, layer=body.layer,
                   system_label=body.system_label, reason=body.reason.strip())
     session.add(fb)

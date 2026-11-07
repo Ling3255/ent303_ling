@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { api } from "../api.js";
+import { useI18n } from "../i18n.jsx";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -44,6 +45,7 @@ function findQuoteRects(textContent, viewport, quote) {
 }
 
 export default function PdfViewer({ paperId, paper, page: initialPage, boxes = NO_BOXES, quote, onClose }) {
+  const { t } = useI18n();
   const canvasRef = useRef(null);
   const [doc, setDoc] = useState(null);
   const [page, setPage] = useState(initialPage || 1);
@@ -56,7 +58,7 @@ export default function PdfViewer({ paperId, paper, page: initialPage, boxes = N
     const task = pdfjsLib.getDocument(api.pdfUrl(paperId));
     task.promise.then(
       (d) => !destroyed && setDoc(d),
-      () => !destroyed && setError("PDF 无法打开：可能已过 7 天保留期被删除，请重新上传。"),
+      () => !destroyed && setError("failed"),
     );
     return () => {
       destroyed = true;
@@ -104,27 +106,30 @@ export default function PdfViewer({ paperId, paper, page: initialPage, boxes = N
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-bar">
-          <strong className="modal-title">{paper?.title || "论文原文"}</strong>
+          <strong className="modal-title">{paper?.title || t("pdf.default")}</strong>
           <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
-            上一页
+            {t("pdf.prev")}
           </button>
           <span>
-            第 {page} / {doc?.numPages || "…"} 页
+            {t("pdf.page", { p: page, n: doc?.numPages || "…" })}
           </span>
           <button onClick={() => setPage((p) => Math.min(doc?.numPages || p, p + 1))} disabled={!doc || page >= doc.numPages}>
-            下一页
+            {t("pdf.next")}
           </button>
           <button onClick={() => setScale((s) => Math.max(0.6, s - 0.2))}>−</button>
           <button onClick={() => setScale((s) => Math.min(3, s + 0.2))}>＋</button>
-          {page !== initialPage && <button onClick={() => setPage(initialPage)}>回到引文页</button>}
+          {page !== initialPage && <button onClick={() => setPage(initialPage)}>{t("pdf.back")}</button>}
           <button className="close" onClick={onClose}>
-            关闭
+            {t("pdf.close")}
           </button>
         </div>
-        {quote && <div className="modal-quote">引文：{quote}</div>}
+        {quote && <div className="modal-quote">
+            {t("pdf.quote")}
+            {quote}
+          </div>}
         <div className="pdf-scroll">
           {error ? (
-            <div className="error">{error}</div>
+            <div className="error">{t("pdf.failed")}</div>
           ) : (
             <div className="pdf-page">
               <canvas ref={canvasRef} />
@@ -139,7 +144,7 @@ export default function PdfViewer({ paperId, paper, page: initialPage, boxes = N
             </div>
           )}
           {!error && page === initialPage && quote && doc && !rects.some((r) => r.kind === "quote") && (
-            <div className="hint">没能在这一页精确定位原句（虚线框是段落大致位置），请对照上方的引文查找。</div>
+            <div className="hint">{t("pdf.notLocated")}</div>
           )}
         </div>
       </div>

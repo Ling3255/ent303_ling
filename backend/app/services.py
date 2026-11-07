@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from .config import settings
 from .db import Paper, SessionLocal, utcnow
+from .i18n import L, dumps
 from .pipeline import papers as paper_io
 from .pipeline.sources import check_source, parse_identifier
 
@@ -78,7 +79,7 @@ def _safe(fn, paper_id: str) -> None:
             paper = session.get(Paper, paper_id)
             if paper:
                 paper.fulltext_status = "failed"
-                paper.parse_warning = f"处理失败：{exc}"
+                paper.parse_warning = dumps(L(f"处理失败：{exc}", f"Processing failed: {exc}"))
                 session.commit()
 
 
@@ -104,14 +105,16 @@ def _process_identifier(paper_id: str) -> None:
 
         if paper.source_status == "not_found":
             paper.fulltext_status = "need_upload"
-            paper.parse_warning = "没有找到这篇论文；如果确实存在，请直接上传 PDF。"
+            paper.parse_warning = dumps(L("没有找到这篇论文；如果确实存在，请直接上传 PDF。",
+                                         "Paper not found. If it does exist, please upload the PDF."))
             session.commit()
             return
         try:
             data = paper_io.find_open_fulltext(doi=paper.doi, arxiv_id=paper.arxiv_id, pdf_url=paper.pdf_url)
         except paper_io.FullTextUnavailable as exc:
             paper.fulltext_status = "need_upload"
-            paper.parse_warning = f"没有找到开放获取的全文，请上传 PDF。（{exc}）"
+            paper.parse_warning = dumps(L(f"没有找到开放获取的全文，请上传 PDF。（{exc}）",
+                                         f"No open-access full text found; please upload the PDF. ({exc})"))
             session.commit()
             return
         paper.pdf_path = str(paper_io.save_pdf(data))
@@ -141,7 +144,7 @@ def _parse_into(paper: Paper, data: bytes) -> dict:
     header, paragraphs, parser, warning = paper_io.parse_pdf(data)
     paper.paragraphs = paragraphs
     paper.parser = parser
-    paper.parse_warning = warning
+    paper.parse_warning = dumps(warning)
     paper.fulltext_status = "ok" if paragraphs else "failed"
     return header
 

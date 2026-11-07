@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api.js";
-import { COLOR_TEXT, keyFindings } from "../labels.js";
+import { keyFindings } from "../labels.js";
+import { useI18n } from "../i18n.jsx";
 import SentenceDetail from "../components/SentenceDetail.jsx";
 
 const PdfViewer = lazy(() => import("../components/PdfViewer.jsx"));
@@ -9,6 +10,7 @@ const COLOR_ORDER = { red: 0, yellow: 1, green: 2, gray: 3, none: 4 };
 
 export default function Report() {
   const { id } = useParams();
+  const { t, tx, locale } = useI18n();
   const [check, setCheck] = useState(null);
   const [error, setError] = useState("");
   const [active, setActive] = useState(null);
@@ -78,14 +80,14 @@ export default function Report() {
   }, [checked, active, pdf]);
 
   if (error) return <div className="error">{error}</div>;
-  if (!check) return <div className="card skeleton">加载中…</div>;
+  if (!check) return <div className="card skeleton">{t("rep.loading")}</div>;
   if (check.status === "failed")
     return (
       <div className="card narrow">
-        <h2>检查失败</h2>
+        <h2>{t("rep.failed")}</h2>
         <p className="error">{check.error}</p>
         <Link to="/" className="button primary">
-          返回重新检查
+          {t("rep.retry")}
         </Link>
       </div>
     );
@@ -103,49 +105,53 @@ export default function Report() {
     <div className="report">
       <div className="report-head">
         <div>
-          <h1>检查报告</h1>
+          <h1>{t("rep.title")}</h1>
           <div className="muted small">
-            {new Date(check.created_at).toLocaleString("zh-CN")} · 检查 {checked.length} 句 · 对照 {report.papers.length} 篇论文 · 用时{" "}
-            {summary.duration_s} 秒
+            {t("rep.meta", {
+              time: new Date(check.created_at).toLocaleString(locale),
+              n: checked.length,
+              p: report.papers.length,
+              s: summary.duration_s,
+            })}
           </div>
         </div>
         <div className="head-actions">
           <Link to="/" className="button ghost">
-            新的检查
+            {t("rep.new")}
           </Link>
           <a className="button primary" href={`/checks/${id}/print`} target="_blank" rel="noreferrer">
-            导出证据单
+            {t("rep.export")}
           </a>
         </div>
       </div>
 
       <div className="stats">
-        <StatChip color="red" n={summary.red} label="可能影响结论" onClick={() => jumpTo("red")} />
-        <StatChip color="yellow" n={summary.yellow} label="需要注意" onClick={() => jumpTo("yellow")} />
-        <StatChip color="green" n={summary.green} label="没发现问题" onClick={() => jumpTo("green")} />
-        {summary.no_claim > 0 && <StatChip color="gray" n={summary.no_claim} label="无可核对论断" onClick={() => jumpTo("gray")} />}
+        <StatChip color="red" n={summary.red} label={t("color.red")} onClick={() => jumpTo("red")} />
+        <StatChip color="yellow" n={summary.yellow} label={t("color.yellow")} onClick={() => jumpTo("yellow")} />
+        <StatChip color="green" n={summary.green} label={t("rep.stat.green")} onClick={() => jumpTo("green")} />
+        {summary.no_claim > 0 && <StatChip color="gray" n={summary.no_claim} label={t("color.gray")} onClick={() => jumpTo("gray")} />}
       </div>
 
       <div className="banner">
-        <span>{report.disclaimer}</span>
-        {rulesMode && <span className="banner-warn">本次为规则模式（未调用大模型），请重点核对原文。</span>}
+        <span>{tx(report.disclaimer)}</span>
+        {rulesMode && <span className="banner-warn">{t("rep.rulesMode")}</span>}
       </div>
 
       <div className="columns">
         <div className="left-pane">
           <div className="card text-pane">
             <div className="pane-head">
-              <h3>原文字</h3>
+              <h3>{t("rep.text")}</h3>
               <span className="hint kbd-hint">
                 <kbd>↑</kbd>
-                <kbd>↓</kbd> 切换句子
+                <kbd>↓</kbd> {t("rep.kbd")}
               </span>
             </div>
             <AnnotatedText text={check.text} sentences={report.sentences} active={active} onPick={pick} numberOf={numberOf} />
             <div className="legend">
               {["red", "yellow", "green", "gray"].map((c) => (
                 <span key={c}>
-                  <span className={`dot ${c}`} /> {COLOR_TEXT[c]}
+                  <span className={`dot ${c}`} /> {t(`color.${c}`)}
                 </span>
               ))}
             </div>
@@ -153,10 +159,10 @@ export default function Report() {
 
           {issues.length > 0 && (
             <div className="card issue-pane">
-              <h3>需要关注（{issues.length}）</h3>
+              <h3>{t("rep.issues", { n: issues.length })}</h3>
               <ul className="issue-list">
                 {issues.map((s) => {
-                  const top = keyFindings(s)[0];
+                  const top = keyFindings(s, t, tx)[0];
                   return (
                     <li key={s.idx}>
                       <button className={`issue ${s.color} ${active === s.idx ? "active" : ""}`} onClick={() => pick(s.idx)}>
@@ -189,12 +195,12 @@ export default function Report() {
               onOpenPdf={setPdf}
             />
           ) : (
-            <div className="card muted">点击左侧的一句话查看三层结果。</div>
+            <div className="card muted">{t("rep.pickHint")}</div>
           )}
         </div>
       </div>
       {pdf && (
-        <Suspense fallback={<div className="modal-backdrop">正在打开 PDF…</div>}>
+        <Suspense fallback={<div className="modal-backdrop">{t("rep.openingPdf")}</div>}>
           <PdfViewer {...pdf} paper={papersById[pdf.paperId]} onClose={() => setPdf(null)} />
         </Suspense>
       )}
@@ -214,6 +220,7 @@ function StatChip({ color, n, label, onClick }) {
 }
 
 function AnnotatedText({ text, sentences, active, onPick, numberOf }) {
+  const { t } = useI18n();
   const pieces = [];
   let cursor = 0;
   for (const s of sentences) {
@@ -224,7 +231,7 @@ function AnnotatedText({ text, sentences, active, onPick, numberOf }) {
         key={s.idx}
         className={`sent ${s.color} ${active === s.idx ? "active" : ""} ${clickable ? "clickable" : ""}`}
         onClick={clickable ? () => onPick(s.idx) : undefined}
-        title={COLOR_TEXT[s.color]}
+        title={t(`color.${s.color}`)}
       >
         {clickable && <sup className={`sent-num ${s.color}`}>{numberOf[s.idx]}</sup>}
         {text.slice(s.start, s.end)}
@@ -236,14 +243,8 @@ function AnnotatedText({ text, sentences, active, onPick, numberOf }) {
   return <div className="annotated">{pieces}</div>;
 }
 
-const STAGE_HINTS = {
-  reading: "解析论文结构、页码和表格",
-  retrieving: "识别论断，在论文中找对应段落",
-  extracting: "核对说法和数字，抽取数据集、划分、指标等条件",
-  comparing: "逐项对照被比较结果的测试条件",
-};
-
 function Progress({ check }) {
+  const { t, tx } = useI18n();
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const started = Date.now();
@@ -254,7 +255,7 @@ function Progress({ check }) {
   const pct = check.status === "queued" ? 4 : Math.round(((current + 0.5) / check.stages.length) * 100);
   return (
     <div className="card progress">
-      <h2>正在检查…</h2>
+      <h2>{t("prog.title")}</h2>
       <div className="bar">
         <div className="bar-fill" style={{ width: `${pct}%` }} />
       </div>
@@ -263,13 +264,13 @@ function Progress({ check }) {
           <li key={s.key} className={i < current ? "done" : i === current && check.status !== "queued" ? "current" : ""}>
             <span className="stage-dot">{i < current ? "✓" : i + 1}</span>
             <div>
-              <div>{s.label}</div>
-              <div className="hint">{STAGE_HINTS[s.key]}</div>
+              <div>{tx(s.label)}</div>
+              <div className="hint">{t(`prog.${s.key}`)}</div>
             </div>
           </li>
         ))}
       </ol>
-      <p className="hint center">已用 {elapsed} 秒，通常 1 分钟内完成。可以离开此页，稍后用同一链接查看结果。</p>
+      <p className="hint center">{t("prog.elapsed", { s: elapsed })}</p>
     </div>
   );
 }

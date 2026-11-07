@@ -12,6 +12,7 @@ from typing import Optional
 import httpx
 
 from ..config import settings
+from ..i18n import L
 from .sources import ARXIV_NEW, DOI_RE, _client, unpaywall_pdf
 
 log = logging.getLogger(__name__)
@@ -35,15 +36,15 @@ def save_pdf(data: bytes) -> Path:
 
 def download_pdf(url: str) -> bytes:
     if not settings.network_enabled:
-        raise FullTextUnavailable("网络已关闭")
+        raise FullTextUnavailable("network disabled")
     try:
         with _client() as client:
             r = client.get(url, timeout=60)
             r.raise_for_status()
     except httpx.HTTPError as exc:
-        raise FullTextUnavailable(f"下载失败：{exc}") from exc
+        raise FullTextUnavailable(f"download failed: {exc}") from exc
     if not r.content.startswith(b"%PDF"):
-        raise FullTextUnavailable("链接返回的不是 PDF")
+        raise FullTextUnavailable("link did not return a PDF")
     return r.content
 
 
@@ -64,7 +65,7 @@ def find_open_fulltext(*, doi: Optional[str], arxiv_id: Optional[str], pdf_url: 
             return download_pdf(url)
         except FullTextUnavailable as exc:
             errors.append(str(exc))
-    raise FullTextUnavailable("；".join(errors) or "没有找到开放获取的全文")
+    raise FullTextUnavailable("; ".join(errors) or "no open-access full text found")
 
 
 # ---------------- 解析 ----------------
@@ -235,7 +236,7 @@ def parse_with_pypdf(data: bytes) -> tuple[dict, list[dict]]:
     return header, paragraphs
 
 
-def parse_pdf(data: bytes) -> tuple[dict, list[dict], str, Optional[str]]:
+def parse_pdf(data: bytes) -> tuple[dict, list[dict], str, Optional[dict]]:
     """返回 (header, paragraphs, parser, warning)。"""
     warning = None
     if settings.grobid_url:
@@ -243,12 +244,15 @@ def parse_pdf(data: bytes) -> tuple[dict, list[dict], str, Optional[str]]:
             header, paragraphs = parse_with_grobid(data)
             if paragraphs:
                 if not any(p["kind"] == "table" for p in paragraphs):
-                    warning = "没有从这篇论文中解析出表格，表格里的数字可能无法核对。"
+                    warning = L("没有从这篇论文中解析出表格，表格里的数字可能无法核对。",
+                              "No tables were parsed from this paper; numbers in tables may not be verifiable.")
                 return header, paragraphs, "grobid", warning
         except Exception as exc:  # GROBID 任何问题都不应让整篇论文读取失败，退回简易解析
             log.warning("GROBID 解析失败，改用 pypdf：%r", exc)
     header, paragraphs = parse_with_pypdf(data)
-    warning = "使用简易解析（未连接 GROBID），表格结构和段落边界可能不准确，也无法在 PDF 中高亮段落。"
+    warning = L("使用简易解析（未连接 GROBID），表格结构和段落边界可能不准确，也无法在 PDF 中高亮段落。",
+                "Using the basic parser (GROBID not connected): table structure and paragraph boundaries may be inaccurate, and paragraphs cannot be outlined in the PDF.")
     if not paragraphs:
-        warning = "PDF 中没有可读取的文字（可能是扫描件），无法核对。"
+        warning = L("PDF 中没有可读取的文字（可能是扫描件），无法核对。",
+                    "The PDF contains no readable text (possibly a scan), so it cannot be checked.")
     return header, paragraphs, "pypdf", warning

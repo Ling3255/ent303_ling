@@ -25,7 +25,7 @@ def test_one_sided_zero_shot_is_flagged():
     out = compare_conditions(_c(environment=("zero-shot", "Whisper models are evaluated zero-shot")),
                              _c(baseline=("Large (no LM)", "wav2vec 2.0 Large (no LM)")))
     env = {f["field"]: f for f in out["fields"]}["environment"]
-    assert env["severity"] == "minor" and env["markers"][0]["b"] == "原文未写明"
+    assert env["severity"] == "minor" and env["markers"][0]["b"] == {"zh": "原文未写明", "en": "not stated"}
 
 
 def test_training_regime_found_in_other_fields():
@@ -98,7 +98,7 @@ def test_whisper_example_llm_mode(whisper_paragraphs, monkeypatch):
     fields = {f["field"]: f for f in sentence["comparability"]["pairs"][0]["fields"]}
     assert fields["split"]["severity"] == "same"
     assert fields["environment"]["severity"] == "major"
-    assert fields["environment"]["markers"][0]["name"] == "训练方式"
+    assert fields["environment"]["markers"][0]["name"] == {"zh": "训练方式", "en": "Training regime"}
     assert {fields["environment"]["markers"][0]["a"], fields["environment"]["markers"][0]["b"]} == {"zero-shot", "fine-tuned"}
     assert sentence["color"] == "red"
 

@@ -13,17 +13,19 @@ from ..db import Check, ConditionCache, Paper, SessionLocal, utcnow
 from . import comparability, support
 from .claims import extract_claims
 from .retrieval import retrieve
+from ..i18n import L, loads
 from .sources import SOURCE_LABELS
 
 log = logging.getLogger(__name__)
 
 STAGES = [
-    ("reading", "读取论文"),
-    ("retrieving", "查找段落"),
-    ("extracting", "抽取条件"),
-    ("comparing", "判断差异"),
+    ("reading", L("读取论文", "Reading papers")),
+    ("retrieving", L("查找段落", "Finding passages")),
+    ("extracting", L("抽取条件", "Extracting conditions")),
+    ("comparing", L("判断差异", "Comparing conditions")),
 ]
-DISCLAIMER = "系统只提示差异，不判断观点对错，也不保证两个结果可以放心比较。请核对原文。"
+DISCLAIMER = L("系统只提示差异，不判断观点对错，也不保证两个结果可以放心比较。请核对原文。",
+               "CiteCheck only flags differences. It does not judge whether claims are right, and never guarantees two results are safe to compare. Please check the original papers.")
 _VERDICT_RANK = {"supported": 3, "number_mismatch": 2, "contradicted": 1, "not_found": 0}
 _COLOR_RANK = {"green": 0, "yellow": 1, "red": 2}
 
@@ -59,7 +61,7 @@ def paper_summary(p: Paper) -> dict:
                    "checked": (p.source_detail or {}).get("checked", {})},
         "fulltext_status": p.fulltext_status,
         "parser": p.parser,
-        "warning": p.parse_warning,
+        "warning": loads(p.parse_warning),
         "has_pdf": bool(p.pdf_path),
         "n_paragraphs": len(p.paragraphs or []),
     }
@@ -121,7 +123,7 @@ def _run(check_id: str, started: float) -> None:
         key = f"{paper.cache_key}|{paper.parser}"
         cached = _cache_get(key, claim)
         if cached:
-            engines.add(cached[1] + " (缓存)")
+            engines.add(cached[1] + " (cached)")
             return claim["id"], paper.id, _rehydrate(cached[0], paper.paragraphs)
         result, engine = support.judge(claim, candidates[(claim["id"], paper.id)], paper.paragraphs)
         engines.add(engine)
@@ -218,7 +220,7 @@ def _sentence_report(s: dict, info: Optional[dict], judged: dict, by_id: dict) -
     if not s.get("selected"):
         return {**base, "color": "none"}
     if not info or not info["claims"]:
-        return {**base, "color": "gray", "note": "这句话没有可以对照原文核对的论断。"}
+        return {**base, "color": "gray", "note": L("这句话没有可以对照原文核对的论断。", "This sentence has no claim that can be checked against the papers.")}
 
     # ① 来源
     paper_ids = list(dict.fromkeys(pid for c in info["claims"] for pid in c["paper_ids"]))
@@ -238,7 +240,7 @@ def _sentence_report(s: dict, info: Optional[dict], judged: dict, by_id: dict) -
             results.append({"claim_id": claim["id"], "subject": claim.get("subject"), "statement": claim["statement"],
                             "values": claim.get("values"), "stated": claim.get("stated"), "paper_id": None,
                             "verdict": "not_found", "label": support.SUPPORT_LABELS["not_found"],
-                            "explanation": "对应的论文没有可读取的全文。", "evidence": [], "conditions": {},
+                            "explanation": L("对应的论文没有可读取的全文。", "No readable full text for the cited paper."), "evidence": [], "conditions": {},
                             "notes": [], "candidates": []})
             continue
         pid, best = max(options, key=lambda o: _VERDICT_RANK[o[1]["verdict"]])
