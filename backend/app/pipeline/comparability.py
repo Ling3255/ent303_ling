@@ -9,7 +9,7 @@ from typing import Optional
 
 import yaml
 
-from ..i18n import L
+from ..i18n import L, L_safe
 from .vocab import RULES_DIR, canonical
 
 SEVERITY_ORDER = {"same": 0, "unknown": 1, "minor": 2, "major": 3}
@@ -20,6 +20,10 @@ LEVEL_LABELS = {
     "major": L("有差异且可能影响结论", "Differs, may affect the conclusion"),
     "na": L("不涉及比较", "No comparison"),
 }
+UNKNOWN_REASON = L("至少一方原文没有写明这一项，无法确认是否一致。",
+                   "At least one paper does not state this, so it cannot be confirmed.")
+SAME_REASON = L("两边一致。", "Same on both sides.")
+NOT_STATED = L("原文未写明", "not stated")
 _CANONICAL_KIND = {"dataset": "dataset", "split": "split", "metric": "metric"}
 
 
@@ -49,9 +53,16 @@ def _quote(cond: dict, field: str) -> Optional[str]:
     return item.get("quote") if isinstance(item, dict) else None
 
 
+_RULE_FALLBACK_EN = {
+    "label": "Condition",
+    "name": "Key difference",
+    "reason": "This condition differs between the two results; please check the papers.",
+}
+
+
 def _l(spec: dict, key: str) -> dict:
-    """规则文件里的文字：key 是中文，key_en 是英文（没写英文就用中文）。"""
-    return L(spec[key], spec.get(f"{key}_en") or spec[key])
+    """规则文件里的文字：key 是中文，key_en 是英文。没写英文时英文界面显示通用英文，不显示中文。"""
+    return L_safe(spec[key], spec.get(f"{key}_en"), _RULE_FALLBACK_EN.get(key, "See the Chinese interface for details."))
 
 
 def _page(cond: dict, field: str) -> Optional[int]:
@@ -114,10 +125,9 @@ def compare_conditions(a: dict, b: dict) -> dict:
         ca = canonical(va, kind) if kind else (va or "").strip().lower() or None
         cb = canonical(vb, kind) if kind else (vb or "").strip().lower() or None
         if not ca or not cb:
-            severity, reason = "unknown", L("至少一方原文没有写明这一项，无法确认是否一致。",
-                                           "At least one paper does not state this, so it cannot be confirmed.")
+            severity, reason = "unknown", UNKNOWN_REASON
         elif ca == cb:
-            severity, reason = "same", L("两边一致。", "Same on both sides.")
+            severity, reason = "same", SAME_REASON
         elif _compatible(ca, cb):
             # 例如 "clean" 和 "test-clean"：一方只是写得更简略，不能断定不同
             severity, reason = "unknown", L(f"两边写法不同（{va} / {vb}），可能是同一项，请核对原文。",
@@ -142,9 +152,10 @@ def compare_conditions(a: dict, b: dict) -> dict:
             # 一方明确是零样本 / oracle，另一方没写：不能当成一致，至少提示需要核对
             target = by_field[marker["fields"][0]]
             known = cat_a or cat_b
-            not_stated = L("原文未写明", "not stated")
-            reason = L(marker["one_sided_reason"].format(known=known),
-                       marker.get("one_sided_reason_en", marker["one_sided_reason"]).format(known=known))
+            not_stated = NOT_STATED
+            reason = L_safe(marker["one_sided_reason"].format(known=known),
+                            (marker.get("one_sided_reason_en") or "").format(known=known),
+                            f"One paper states “{known}” and the other does not; please check whether the results are comparable.")
             target["markers"].append({"name": _l(marker, "name"), "a": cat_a or not_stated, "b": cat_b or not_stated,
                                       "reason": reason})
             if SEVERITY_ORDER[target["severity"]] < SEVERITY_ORDER["minor"]:

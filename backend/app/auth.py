@@ -45,18 +45,19 @@ def normalize_email(email: str) -> str:
     return email
 
 
-def _send_email(to: str, code: str) -> bool:
+def _send_email(to: str, code: str, lang: str = "zh") -> bool:
     if not settings.smtp_host:
         return False
     msg = EmailMessage()
-    msg["Subject"] = f"CiteCheck 登录验证码 / login code: {code}"
     msg["From"] = settings.smtp_from
     msg["To"] = to
-    msg.set_content(
-        f"你的 CiteCheck 登录验证码是 {code}，{CODE_MINUTES} 分钟内有效。\n如果不是你本人操作，请忽略这封邮件。\n\n"
-        f"Your CiteCheck login code is {code}. It expires in {CODE_MINUTES} minutes.\n"
-        "If you did not request it, please ignore this email."
-    )
+    if lang == "en":
+        msg["Subject"] = f"Your CiteCheck login code: {code}"
+        msg.set_content(f"Your CiteCheck login code is {code}. It expires in {CODE_MINUTES} minutes.\n"
+                        "If you did not request it, please ignore this email.")
+    else:
+        msg["Subject"] = f"CiteCheck 登录验证码：{code}"
+        msg.set_content(f"你的 CiteCheck 登录验证码是 {code}，{CODE_MINUTES} 分钟内有效。\n如果不是你本人操作，请忽略这封邮件。")
     smtp_cls = smtplib.SMTP_SSL if settings.smtp_port == 465 else smtplib.SMTP
     with smtp_cls(settings.smtp_host, settings.smtp_port, timeout=15) as smtp:
         if smtp_cls is smtplib.SMTP:
@@ -67,7 +68,7 @@ def _send_email(to: str, code: str) -> bool:
     return True
 
 
-def request_code(session: Session, email: str) -> dict:
+def request_code(session: Session, email: str, lang: str = "zh") -> dict:
     email = normalize_email(email)
     last = session.scalars(select(LoginCode).where(LoginCode.email == email).order_by(LoginCode.created_at.desc())).first()
     if last and (utcnow() - _aware(last.created_at)).total_seconds() < RESEND_SECONDS:
@@ -76,7 +77,7 @@ def request_code(session: Session, email: str) -> dict:
     session.add(LoginCode(email=email, code_hash=_hash(code), expires_at=utcnow() + timedelta(minutes=CODE_MINUTES)))
     session.commit()
     try:
-        sent = _send_email(email, code)
+        sent = _send_email(email, code, lang)
     except (smtplib.SMTPException, OSError) as exc:
         log.warning("验证码邮件发送失败：%s", exc)
         sent = False

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { api } from "../api.js";
-import { SEVERITY_COLOR, keyFindings } from "../labels.js";
+import { SEVERITY_COLOR, fieldLabel, keyFindings, levelLabel, markerName, markerSide, sourceLabel, verdictLabel } from "../labels.js";
 import { useI18n } from "../i18n.jsx";
 
 const SUPPORT_COLOR = { supported: "green", not_found: "yellow", contradicted: "red", number_mismatch: "red" };
@@ -21,9 +21,9 @@ export default function SentenceDetail({ number, checkId, sentence, papersById, 
   const findings = keyFindings(sentence, t, tx);
   const paperTitle = (pid) => papersById[pid]?.title || t("det.paper");
   const layers = [
-    { key: "source", color: source.color, label: source.items.map((i) => tx(i.label)).join(" / ") },
-    { key: "support", color: support.color, label: tx(support.label) },
-    { key: "comparability", color: comparability.color, label: tx(comparability.label) },
+    { key: "source", color: source.color, label: source.items.map((i) => sourceLabel(i, t, tx)).join(" / ") },
+    { key: "support", color: support.color, label: verdictLabel({ label: support.label, verdict: support.level }, t, tx) },
+    { key: "comparability", color: comparability.color, label: levelLabel(comparability, t, tx) },
   ];
 
   return (
@@ -61,7 +61,7 @@ export default function SentenceDetail({ number, checkId, sentence, papersById, 
             const p = papersById[item.paper_id];
             return (
               <li key={item.paper_id} className="source-row">
-                <span className={`tag ${SOURCE_COLOR[item.status]}`}>{tx(item.label)}</span>
+                <span className={`tag ${SOURCE_COLOR[item.status]}`}>{sourceLabel(item, t, tx)}</span>
                 <div>
                   <div>{item.title || t("det.untitled")}</div>
                   <div className="muted small">
@@ -82,11 +82,11 @@ export default function SentenceDetail({ number, checkId, sentence, papersById, 
         </ul>
       </Layer>
 
-      <Layer name="support" color={support.color} summary={tx(support.label)} checkId={checkId} sentence={sentence}>
+      <Layer name="support" color={support.color} summary={layers[1].label} checkId={checkId} sentence={sentence}>
         {support.results.map((r) => (
           <div key={r.claim_id} className="claim">
             <div className="claim-head">
-              <span className={`tag ${SUPPORT_COLOR[r.verdict]}`}>{tx(r.label)}</span>
+              <span className={`tag ${SUPPORT_COLOR[r.verdict]}`}>{verdictLabel(r, t, tx)}</span>
               <strong>{r.subject || t("det.claim")}</strong>
               {r.values?.length > 0 && (
                 <span className="num-compare">
@@ -133,7 +133,7 @@ export default function SentenceDetail({ number, checkId, sentence, papersById, 
       <Layer
         name="comparability"
         color={comparability.color}
-        summary={tx(comparability.label)}
+        summary={layers[2].label}
         checkId={checkId}
         sentence={sentence}
         core
@@ -243,13 +243,13 @@ function ConditionTable({ pair, onOpenPdf, papersById }) {
 
       {markers.map((m, i) => (
         <div key={i} className={`callout ${SEVERITY_COLOR[m.severity]}`}>
-          <div className="callout-title">{t("det.keyDiff", { name: tx(m.name) })}</div>
+          <div className="callout-title">{t("det.keyDiff", { name: markerName(m, t, tx) })}</div>
           <div className="callout-vs">
             <span>
-              {nameA}: <b>{tx(m.a)}</b>
+              {nameA}: <b>{markerSide(m.a, t, tx)}</b>
             </span>
             <span>
-              {nameB}: <b>{tx(m.b)}</b>
+              {nameB}: <b>{markerSide(m.b, t, tx)}</b>
             </span>
           </div>
           <div className="callout-reason">{tx(m.reason)}</div>
@@ -270,7 +270,7 @@ function ConditionTable({ pair, onOpenPdf, papersById }) {
             <tbody>
               {differing.map((f) => (
                 <tr key={f.field} className={SEVERITY_COLOR[f.severity]}>
-                  <td className="cond-name">{tx(f.label)}</td>
+                  <td className="cond-name">{fieldLabel(f, t, tx)}</td>
                   <td>
                     <Cond value={f.a} quote={f.a_quote} page={f.a_page} paperId={pair.a.paper_id} onOpenPdf={onOpenPdf} />
                   </td>
@@ -293,7 +293,7 @@ function ConditionTable({ pair, onOpenPdf, papersById }) {
           <span className="tag green">{t("det.same")}</span>
           {same.map((f) => (
             <span key={f.field} className="same-item">
-              {tx(f.label)} <b>{f.a}</b>
+              {fieldLabel(f, t, tx)} <b>{f.a}</b>
             </span>
           ))}
         </div>

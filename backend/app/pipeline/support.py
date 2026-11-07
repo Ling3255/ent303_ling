@@ -12,7 +12,7 @@ import re
 from typing import Optional
 
 from .. import llm
-from ..i18n import L
+from ..i18n import L, L_safe, has_cjk
 from ..config import settings
 from .claims import FIELDS
 from .comparability import load_rules
@@ -28,7 +28,7 @@ SUPPORT_LABELS = {
     "contradicted": L("说法相反", "Contradicted"),
     "number_mismatch": L("数字不一致", "Number mismatch"),
 }
-PROMPT_VERSION = "v4"  # 改提示词时加一，旧的条件缓存自动失效
+PROMPT_VERSION = "v5"  # 改提示词时加一，旧的条件缓存自动失效
 
 SUPPORT_SYSTEM = """你是 CiteCheck 的原文核对模块。给你一条论断和同一篇论文中检索出的候选段落（含表格）。
 任务一：判断论文是否支持这条论断。
@@ -49,6 +49,7 @@ SUPPORT_SYSTEM = """你是 CiteCheck 的原文核对模块。给你一条论断�
 说明表中另一列是在 LibriSpeech 上有监督训练的模型）；附录里的模型清单（如 "wav2vec2-large-960h" 表示在 LibriSpeech 960 小时上训练）。
 找到这类线索时 environment 要写成 "fine-tuned on LibriSpeech" 之类，并逐字引用那句话。
 规则：
+- 每个字段的 value 用英文简短写（照论文里的写法，如 "zero-shot"、"fine-tuned on LibriSpeech"），不要写中文。
 - 每个字段的 quote 必须从候选段落中逐字复制（英文原文，不要翻译、不要改写、不要拼接）。
 - 找不到原句支持的字段，value 和 quote 都填 null。绝对不要凭常识补。
 - evidence 列出支撑结论的段落编号和逐字原句，最多 3 条。
@@ -116,6 +117,9 @@ def _finalize(raw: dict, candidates: list[dict], all_paragraphs: list[dict]) -> 
         para = locate_quote(quote, pool) if value and quote else None
         if value and not para:
             dropped.append(field)
+        if para and has_cjk(str(value)):
+            # 值写成了中文：英文论文里的条件值一律用原句里的英文，退一步就用原句本身
+            value = quote if len(quote) <= 60 else quote[:57] + "…"
         conditions[field] = (
             {"value": str(value), "quote": quote, "paragraph_id": para["id"], "page": para.get("page")}
             if para else {"value": None, "quote": None, "paragraph_id": None, "page": None}
@@ -135,11 +139,20 @@ def _finalize(raw: dict, candidates: list[dict], all_paragraphs: list[dict]) -> 
     }
 
 
+VERDICT_EXPLANATION_EN = {
+    "supported": "The paper states this claim, and the numbers match.",
+    "not_found": "The candidate passages do not contain this claim.",
+    "contradicted": "The paper says the opposite of this claim.",
+    "number_mismatch": "The paper reports this result with a different number.",
+}
+
+
 def _explanation(raw: dict):
     value = raw.get("explanation") or ""
     if isinstance(value, dict):
         return value
-    return L(value, raw.get("explanation_en") or value)
+    verdict = raw.get("verdict") if raw.get("verdict") in SUPPORT_LABELS else "not_found"
+    return L_safe(value, raw.get("explanation_en"), VERDICT_EXPLANATION_EN[verdict])
 
 
 def _evidence(para: dict, quote: str) -> dict:

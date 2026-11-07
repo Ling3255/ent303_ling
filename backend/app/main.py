@@ -18,6 +18,7 @@ from . import auth, services
 from .config import settings
 from .db import Check, Feedback, Paper, User, get_session, init_db
 from .i18n import L
+from .pipeline.legacy import upgrade_report
 from .pipeline.runner import paper_summary, run_check, stage_list
 from .pipeline.sentences import split_and_flag
 
@@ -48,6 +49,7 @@ class IdentifierIn(BaseModel):
 
 class EmailIn(BaseModel):
     email: str
+    lang: Literal["zh", "en"] = "zh"
 
 
 class VerifyIn(BaseModel):
@@ -100,7 +102,7 @@ def health():
 
 @app.post("/api/auth/request-code")
 def auth_request_code(body: EmailIn, session: Session = Depends(get_session)):
-    return auth.request_code(session, body.email)
+    return auth.request_code(session, body.email, body.lang)
 
 
 @app.post("/api/auth/verify")
@@ -213,7 +215,7 @@ def get_check(check_id: str, session: Session = Depends(get_session)):
         "text": check.text,
         "created_at": check.created_at.isoformat() if check.created_at else None,
         "duration_s": check.duration_s,
-        "report": check.report,
+        "report": upgrade_report(check.report),
     }
 
 

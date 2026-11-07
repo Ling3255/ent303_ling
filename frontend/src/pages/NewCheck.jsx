@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api.js";
-import { authorLine } from "../labels.js";
+import { authorLine, sourceLabel } from "../labels.js";
 import { useAuth } from "../auth.jsx";
 import { useI18n } from "../i18n.jsx";
 
@@ -267,7 +267,7 @@ export default function NewCheck() {
                       <div className="paper-tags">
                         <PaperStatus paper={p} />
                         {p.fulltext_status !== "processing" && (
-                          <span className={`tag ${SOURCE_CLASS[p.source.status]}`}>① {tx(p.source.label)}</span>
+                          <span className={`tag ${SOURCE_CLASS[p.source.status]}`}>① {sourceLabel(p.source, t, tx)}</span>
                         )}
                       </div>
                       {p.warning && <div className="paper-warning">{tx(p.warning)}</div>}

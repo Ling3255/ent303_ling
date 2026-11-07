@@ -1,4 +1,5 @@
-import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import NewCheck from "./pages/NewCheck.jsx";
 import Report from "./pages/Report.jsx";
 import PrintReport from "./pages/PrintReport.jsx";
@@ -43,7 +44,12 @@ export default function App() {
 
 function AppRoutes() {
   const { user } = useAuth();
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const { pathname } = useLocation();
+  // 证据单页自己设置标题（导出 PDF 的文件名），其他页面用应用标题
+  useEffect(() => {
+    if (!pathname.endsWith("/print")) document.title = t("app.title");
+  }, [pathname, lang, t]);
   return (
     <Routes>
       <Route path="/checks/:id/print" element={<PrintReport />} />

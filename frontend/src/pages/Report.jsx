@@ -264,7 +264,7 @@ function Progress({ check }) {
           <li key={s.key} className={i < current ? "done" : i === current && check.status !== "queued" ? "current" : ""}>
             <span className="stage-dot">{i < current ? "✓" : i + 1}</span>
             <div>
-              <div>{tx(s.label)}</div>
+              <div>{tx(s.label, t(`stage.${s.key}`))}</div>
               <div className="hint">{t(`prog.${s.key}`)}</div>
             </div>
           </li>

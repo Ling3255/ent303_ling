@@ -31,11 +31,8 @@ async function request(path, options = {}) {
     // 后端的提示是 {zh, en}；校验错误是数组
     const message = Array.isArray(detail)
       ? detail.map((d) => d.msg).join("; ")
-      : detail
-        ? pickText(getLang(), detail)
-        : getLang() === "zh"
-          ? `请求失败（${res.status}）`
-          : `Request failed (${res.status})`;
+      : (detail && pickText(getLang(), detail)) ||
+        (getLang() === "zh" ? `请求失败（${res.status}）` : `Request failed (${res.status})`);
     throw new ApiError(message, res.status);
   }
   return body;
@@ -49,7 +46,7 @@ const json = (method, data) => ({
 
 export const api = {
   health: () => request("/api/health"),
-  requestCode: (email) => request("/api/auth/request-code", json("POST", { email })),
+  requestCode: (email) => request("/api/auth/request-code", json("POST", { email, lang: getLang() })),
   verify: (email, code) => request("/api/auth/verify", json("POST", { email, code })),
   logout: () => request("/api/auth/logout", { method: "POST" }),
   me: () => request("/api/me"),

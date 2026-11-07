@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api.js";
 import { LangToggle, useI18n } from "../i18n.jsx";
+import { fieldLabel, levelLabel, markerSide, sourceLabel, verdictLabel } from "../labels.js";
 
 // 一页证据单：用浏览器“打印 → 存储为 PDF”导出，中文字体不会丢
 export default function PrintReport() {
@@ -66,7 +67,7 @@ export default function PrintReport() {
                 authors:
                   (p.authors || []).slice(0, 2).join(", ") + ((p.authors?.length || 0) > 2 ? t("det.etal") : ""),
                 year: p.year || t("home.yearUnknown"),
-                source: tx(p.source.label),
+                source: sourceLabel(p.source, t, tx),
               })}
               {p.venue ? `, ${p.venue}` : ""}
             </li>
@@ -91,16 +92,16 @@ export default function PrintReport() {
                 <span className={`print-dot ${s.color}`} />
                 {t(`color.${s.color}`)}
               </td>
-              <td>{s.support.results.map((r) => `${r.subject ? r.subject + ": " : ""}${tx(r.label)}`).join("; ")}</td>
+              <td>{s.support.results.map((r) => `${r.subject ? r.subject + ": " : ""}${verdictLabel(r, t, tx)}`).join("; ")}</td>
               <td>
                 {s.comparability.level !== "na" && (
                   <div>
-                    <strong>{tx(s.comparability.label)}</strong>
+                    <strong>{levelLabel(s.comparability, t, tx)}</strong>
                     {s.comparability.pairs
                       .flatMap((p) => p.fields.filter((f) => f.severity === "major" || f.severity === "minor"))
                       .map((f) => (
                         <div key={f.field}>
-                          {tx(f.label)}: {f.markers?.[0] ? `${tx(f.markers[0].a)} vs ${tx(f.markers[0].b)}` : `${f.a || t("find.notStated")} vs ${f.b || t("find.notStated")}`}{" "}
+                          {fieldLabel(f, t, tx)}: {f.markers?.[0] ? `${markerSide(f.markers[0].a, t, tx)} vs ${markerSide(f.markers[0].b, t, tx)}` : `${f.a || t("find.notStated")} vs ${f.b || t("find.notStated")}`}{" "}
                           ({t(`sev.${f.severity}`)})
                         </div>
                       ))}

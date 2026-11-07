@@ -29,6 +29,30 @@ const dict = {
     "sev.unknown": "原文未写明",
     "sev.minor": "有差异，通常不影响",
     "sev.major": "有差异，可能影响结论",
+    "verdict.supported": "原文支持",
+    "verdict.not_found": "原文没有",
+    "verdict.contradicted": "说法相反",
+    "verdict.number_mismatch": "数字不一致",
+    "src.published": "存在",
+    "src.preprint": "预印本",
+    "src.not_found": "找不到",
+    "src.unknown": "查询失败",
+    "level.consistent": "条件一致",
+    "level.insufficient": "原文未写明部分条件",
+    "level.minor": "有差异但通常不影响",
+    "level.major": "有差异且可能影响结论",
+    "level.na": "不涉及比较",
+    "field.dataset": "数据集",
+    "field.split": "数据划分",
+    "field.metric": "指标",
+    "field.baseline": "基线 / 模型配置",
+    "field.environment": "测试环境",
+    "field.other": "条件",
+    "marker.fallback": "关键差异",
+    "stage.reading": "读取论文",
+    "stage.retrieving": "查找段落",
+    "stage.extracting": "抽取条件",
+    "stage.comparing": "判断差异",
     "authors.none": "作者未识别",
     "authors.etal": "{names} 等",
 
@@ -225,6 +249,30 @@ const dict = {
     "sev.unknown": "Not stated",
     "sev.minor": "Differs, usually minor",
     "sev.major": "Differs, may affect conclusion",
+    "verdict.supported": "Supported",
+    "verdict.not_found": "Not found in paper",
+    "verdict.contradicted": "Contradicted",
+    "verdict.number_mismatch": "Number mismatch",
+    "src.published": "Exists",
+    "src.preprint": "Preprint",
+    "src.not_found": "Not found",
+    "src.unknown": "Lookup failed",
+    "level.consistent": "Conditions match",
+    "level.insufficient": "Some conditions not stated",
+    "level.minor": "Differs, usually minor",
+    "level.major": "Differs, may affect the conclusion",
+    "level.na": "No comparison",
+    "field.dataset": "Dataset",
+    "field.split": "Split",
+    "field.metric": "Metric",
+    "field.baseline": "Baseline / model config",
+    "field.environment": "Evaluation setup",
+    "field.other": "Condition",
+    "marker.fallback": "Key difference",
+    "stage.reading": "Reading papers",
+    "stage.retrieving": "Finding passages",
+    "stage.extracting": "Extracting conditions",
+    "stage.comparing": "Comparing conditions",
     "authors.none": "Authors not detected",
     "authors.etal": "{names} et al.",
 
@@ -415,10 +463,16 @@ export function translate(lang, key, params) {
   return s;
 }
 
-export function pickText(lang, value) {
+const CJK = /[\u3400-\u9fff\uf900-\ufaff\u3000-\u303f\uff00-\uffef]/;
+export const hasCjk = (s) => CJK.test(s || "");
+
+// 后端的文字是 {zh, en}；英文界面下如果拿到的还是中文（旧数据或漏翻），宁可显示英文兜底也不显示中文。
+// 只用于系统文字；用户输入、论文标题和原文引文不经过这里。
+export function pickText(lang, value, fallback = "") {
   if (value == null) return "";
-  if (typeof value === "object") return value[lang] ?? value.zh ?? "";
-  return String(value);
+  const text = typeof value === "object" ? value[lang] ?? value.en ?? value.zh ?? "" : String(value);
+  if (lang === "en" && hasCjk(text)) return fallback;
+  return text;
 }
 
 const LangContext = createContext(null);
@@ -432,14 +486,13 @@ export function LangProvider({ children }) {
   }, []);
   useEffect(() => {
     document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
-    document.title = translate(lang, "app.title");
   }, [lang]);
   const value = useMemo(
     () => ({
       lang,
       setLang,
       t: (key, params) => translate(lang, key, params),
-      tx: (v) => pickText(lang, v),
+      tx: (v, fallback) => pickText(lang, v, fallback),
       locale: lang === "zh" ? "zh-CN" : "en-GB",
     }),
     [lang, setLang],
