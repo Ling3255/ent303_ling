@@ -168,14 +168,26 @@ function Layer({ name, color, summary, children, checkId, sentence, core }) {
   const [open, setOpen] = useState(color !== "green");
   return (
     <section id={`layer-${name}`} className={`card layer ${color || "neutral"}`}>
-      <header onClick={() => setOpen(!open)}>
+      <header
+        role="button"
+        tabIndex={0}
+        aria-expanded={open}
+        aria-controls={`layer-body-${name}`}
+        onClick={() => setOpen(!open)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen(!open);
+          }
+        }}
+      >
         <h3>{t(`layer.${name}`)}</h3>
         {core && <span className="core-badge">{t("home.core")}</span>}
         <span className={`tag ${color || "neutral"}`}>{summary}</span>
         <span className="chev">{open ? t("det.collapse") : t("det.expand")}</span>
       </header>
       {open && (
-        <div className="layer-body">
+        <div className="layer-body" id={`layer-body-${name}`}>
           {children}
           <Disagree checkId={checkId} sentence={sentence} layer={name} label={summary} />
         </div>

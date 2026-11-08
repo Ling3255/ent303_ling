@@ -104,7 +104,7 @@ export default function PdfViewer({ paperId, paper, page: initialPage, boxes = N
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" role="dialog" aria-modal="true" aria-label={paper?.title || t("pdf.default")} onClick={(e) => e.stopPropagation()}>
         <div className="modal-bar">
           <strong className="modal-title">{paper?.title || t("pdf.default")}</strong>
           <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>

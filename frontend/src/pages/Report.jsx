@@ -14,6 +14,7 @@ export default function Report() {
   const [check, setCheck] = useState(null);
   const [error, setError] = useState("");
   const [active, setActive] = useState(null);
+  const [filter, setFilter] = useState("all");
   const [pdf, setPdf] = useState(null); // {paperId, page, boxes, quote}
   const detailRef = useRef(null);
 
@@ -49,6 +50,11 @@ export default function Report() {
         .sort((a, b) => COLOR_ORDER[a.color] - COLOR_ORDER[b.color] || a.idx - b.idx),
     [checked],
   );
+  const visible = useMemo(
+    () => (filter === "all" ? checked : filter === "issues" ? issues : checked.filter((s) => s.color === filter)),
+    [checked, filter, issues],
+  );
+  const visibleIds = useMemo(() => new Set(visible.map((s) => s.idx)), [visible]);
 
   const pick = useCallback((idx) => {
     setActive(idx);
@@ -56,36 +62,32 @@ export default function Report() {
     if (window.innerWidth < 960) detailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  // 默认选中最严重的一句
   useEffect(() => {
-    if (report && active === null) {
-      const first = issues[0] || checked[0];
-      if (first) setActive(first.idx);
-    }
-  }, [report, active, issues, checked]);
+    if (report && !visible.some((s) => s.idx === active)) setActive(visible[0]?.idx ?? null);
+  }, [report, active, visible]);
 
-  // ↑ / ↓ 在检查过的句子之间切换
+  // ↑ / ↓ 在当前筛选结果之间切换
   useEffect(() => {
     const onKey = (e) => {
-      if (pdf || !checked.length || ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
+      if (pdf || !visible.length || ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "j" && e.key !== "k") return;
       e.preventDefault();
-      const pos = checked.findIndex((s) => s.idx === active);
+      const pos = visible.findIndex((s) => s.idx === active);
       const step = e.key === "ArrowDown" || e.key === "j" ? 1 : -1;
-      const next = checked[Math.min(checked.length - 1, Math.max(0, pos + step))];
+      const next = visible[Math.min(visible.length - 1, Math.max(0, pos + step))];
       if (next) setActive(next.idx);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [checked, active, pdf]);
+  }, [visible, active, pdf]);
 
-  if (error) return <div className="error">{error}</div>;
+  if (error) return <div className="error" role="alert">{error}</div>;
   if (!check) return <div className="card skeleton">{t("rep.loading")}</div>;
   if (check.status === "failed")
     return (
       <div className="card narrow">
         <h2>{t("rep.failed")}</h2>
-        <p className="error">{check.error}</p>
+        <p className="error" role="alert">{check.error}</p>
         <Link to="/" className="button primary">
           {t("rep.retry")}
         </Link>
@@ -93,13 +95,19 @@ export default function Report() {
     );
   if (!report) return <Progress check={check} />;
 
-  const sentence = report.sentences.find((s) => s.idx === active);
+  const sentence = visible.find((s) => s.idx === active);
   const { summary } = report;
   const rulesMode = report.engine.claims === "rules" || report.engine.support.includes("rules");
-  const jumpTo = (color) => {
-    const s = checked.find((x) => x.color === color);
-    if (s) pick(s.idx);
+  const selectFilter = (next) => {
+    setFilter(next);
+    const list = next === "all" ? checked : next === "issues" ? issues : checked.filter((s) => s.color === next);
+    if (list.length && !list.some((s) => s.idx === active)) pick(list[0].idx);
   };
+  const pickFromText = (idx) => {
+    if (!visibleIds.has(idx)) setFilter("all");
+    pick(idx);
+  };
+  const visibleIssues = visible.filter((s) => s.color === "red" || s.color === "yellow");
 
   return (
     <div className="report">
@@ -125,16 +133,28 @@ export default function Report() {
         </div>
       </div>
 
-      <div className="stats">
-        <StatChip color="red" n={summary.red} label={t("color.red")} onClick={() => jumpTo("red")} />
-        <StatChip color="yellow" n={summary.yellow} label={t("color.yellow")} onClick={() => jumpTo("yellow")} />
-        <StatChip color="green" n={summary.green} label={t("rep.stat.green")} onClick={() => jumpTo("green")} />
-        {summary.no_claim > 0 && <StatChip color="gray" n={summary.no_claim} label={t("color.gray")} onClick={() => jumpTo("gray")} />}
+      <div className="stats" role="group" aria-label={t("rep.filter")}>
+        <StatChip color="red" n={summary.red} label={t("color.red")} active={filter === "red"} onClick={() => selectFilter("red")} />
+        <StatChip color="yellow" n={summary.yellow} label={t("color.yellow")} active={filter === "yellow"} onClick={() => selectFilter("yellow")} />
+        <StatChip color="green" n={summary.green} label={t("rep.stat.green")} active={filter === "green"} onClick={() => selectFilter("green")} />
+        {summary.no_claim > 0 && <StatChip color="gray" n={summary.no_claim} label={t("color.gray")} active={filter === "gray"} onClick={() => selectFilter("gray")} />}
       </div>
 
       <div className="banner">
         <span>{tx(report.disclaimer)}</span>
         {rulesMode && <span className="banner-warn">{t("rep.rulesMode")}</span>}
+      </div>
+
+      <div className="report-filters">
+        <div className="filter-buttons" role="group" aria-label={t("rep.filter")}>
+          <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => selectFilter("all")} aria-pressed={filter === "all"}>
+            {t("rep.filterAll", { n: checked.length })}
+          </button>
+          <button className={`filter-btn ${filter === "issues" ? "active" : ""}`} onClick={() => selectFilter("issues")} aria-pressed={filter === "issues"} disabled={!issues.length}>
+            {t("rep.filterIssues", { n: issues.length })}
+          </button>
+        </div>
+        <span className="filter-status" role="status">{t("rep.showing", { n: visible.length, total: checked.length })}</span>
       </div>
 
       <div className="columns">
@@ -147,7 +167,7 @@ export default function Report() {
                 <kbd>↓</kbd> {t("rep.kbd")}
               </span>
             </div>
-            <AnnotatedText text={check.text} sentences={report.sentences} active={active} onPick={pick} numberOf={numberOf} />
+            <AnnotatedText text={check.text} sentences={report.sentences} active={active} onPick={pickFromText} numberOf={numberOf} visibleIds={visibleIds} />
             <div className="legend">
               {["red", "yellow", "green", "gray"].map((c) => (
                 <span key={c}>
@@ -157,11 +177,11 @@ export default function Report() {
             </div>
           </div>
 
-          {issues.length > 0 && (
+          {visibleIssues.length > 0 && (
             <div className="card issue-pane">
-              <h3>{t("rep.issues", { n: issues.length })}</h3>
+              <h3>{t("rep.issues", { n: visibleIssues.length })}</h3>
               <ul className="issue-list">
-                {issues.map((s) => {
+                {visibleIssues.map((s) => {
                   const top = keyFindings(s, t, tx)[0];
                   return (
                     <li key={s.idx}>
@@ -208,9 +228,9 @@ export default function Report() {
   );
 }
 
-function StatChip({ color, n, label, onClick }) {
+function StatChip({ color, n, label, active, onClick }) {
   return (
-    <button className={`stat ${color}`} onClick={onClick} disabled={!n}>
+    <button className={`stat ${color} ${active ? "active" : ""}`} onClick={onClick} disabled={!n} aria-pressed={active}>
       <span className="stat-n">{n}</span>
       <span className="stat-label">
         <span className={`dot ${color}`} /> {label}
@@ -219,18 +239,28 @@ function StatChip({ color, n, label, onClick }) {
   );
 }
 
-function AnnotatedText({ text, sentences, active, onPick, numberOf }) {
+function AnnotatedText({ text, sentences, active, onPick, numberOf, visibleIds }) {
   const { t } = useI18n();
   const pieces = [];
   let cursor = 0;
   for (const s of sentences) {
     if (s.start > cursor) pieces.push(<span key={`g${cursor}`}>{text.slice(cursor, s.start)}</span>);
     const clickable = s.selected;
+    const dimmed = clickable && !visibleIds.has(s.idx);
     pieces.push(
       <span
         key={s.idx}
-        className={`sent ${s.color} ${active === s.idx ? "active" : ""} ${clickable ? "clickable" : ""}`}
+        className={`sent ${s.color} ${active === s.idx ? "active" : ""} ${clickable ? "clickable" : ""} ${dimmed ? "filtered-out" : ""}`}
         onClick={clickable ? () => onPick(s.idx) : undefined}
+        onKeyDown={clickable ? (e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onPick(s.idx);
+          }
+        } : undefined}
+        role={clickable ? "button" : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        aria-pressed={clickable ? active === s.idx : undefined}
         title={t(`color.${s.color}`)}
       >
         {clickable && <sup className={`sent-num ${s.color}`}>{numberOf[s.idx]}</sup>}
@@ -248,20 +278,20 @@ function Progress({ check }) {
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const started = Date.now();
-    const t = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 500);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 500);
+    return () => clearInterval(timer);
   }, []);
   const current = Math.max(0, check.stages.findIndex((s) => s.key === check.stage));
   const pct = check.status === "queued" ? 4 : Math.round(((current + 0.5) / check.stages.length) * 100);
   return (
     <div className="card progress">
       <h2>{t("prog.title")}</h2>
-      <div className="bar">
+      <div className="bar" role="progressbar" aria-label={t("prog.title")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
         <div className="bar-fill" style={{ width: `${pct}%` }} />
       </div>
       <ol className="stages">
         {check.stages.map((s, i) => (
-          <li key={s.key} className={i < current ? "done" : i === current && check.status !== "queued" ? "current" : ""}>
+          <li key={s.key} className={i < current ? "done" : i === current && check.status !== "queued" ? "current" : ""} aria-current={i === current && check.status !== "queued" ? "step" : undefined}>
             <span className="stage-dot">{i < current ? "✓" : i + 1}</span>
             <div>
               <div>{tx(s.label, t(`stage.${s.key}`))}</div>

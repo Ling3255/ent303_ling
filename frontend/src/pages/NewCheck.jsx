@@ -7,11 +7,35 @@ import { useI18n } from "../i18n.jsx";
 
 const MAX_CHARS = 1500;
 const MAX_PAPERS = 5;
-const EXAMPLE_TEXT = {
-  zh: "Whisper 和 wav2vec 2.0 在 LibriSpeech 上都是 2.7%，所以准确率差不多。Whisper 是 OpenAI 在 2022 年提出的语音识别模型。",
-  en: "Whisper and wav2vec 2.0 both reach 2.7% on LibriSpeech, so their accuracy is about the same. Whisper is a speech recognition model proposed by OpenAI in 2022.",
-};
-const EXAMPLE_PAPER = "arXiv:2212.04356";
+const EXAMPLES = [
+  {
+    id: "speech",
+    label: "home.exampleSpeech",
+    paper: "arXiv:2212.04356",
+    text: {
+      zh: "Whisper 和 wav2vec 2.0 在 LibriSpeech 上都是 2.7%，所以准确率差不多。Whisper 是 OpenAI 在 2022 年提出的语音识别模型。",
+      en: "Whisper and wav2vec 2.0 both reach 2.7% on LibriSpeech, so their accuracy is about the same. Whisper is a speech recognition model proposed by OpenAI in 2022.",
+    },
+  },
+  {
+    id: "image",
+    label: "home.exampleImage",
+    paper: "arXiv:1512.03385",
+    text: {
+      zh: "ResNet-50 和 VGG-16 在 ImageNet 上的 top-1 错误率相近，所以它们在各种图像分类场景中的准确率都差不多。",
+      en: "ResNet-50 and VGG-16 have similar top-1 error rates on ImageNet, so their accuracy is about the same across image classification settings.",
+    },
+  },
+  {
+    id: "rag",
+    label: "home.exampleRag",
+    paper: "arXiv:2005.11401",
+    text: {
+      zh: "RAG-Token 和 RAG-Sequence 在 Natural Questions 上的 F1 接近，所以两种生成方式的效果相同。",
+      en: "RAG-Token and RAG-Sequence achieve similar F1 scores on Natural Questions, so both generation strategies are equally effective.",
+    },
+  },
+];
 
 const SOURCE_CLASS = { published: "green", preprint: "yellow", not_found: "red", unknown: "yellow" };
 
@@ -26,6 +50,7 @@ export default function NewCheck() {
   const [error, setError] = useState("");
   const [health, setHealth] = useState(null);
   const [dragging, setDragging] = useState(false);
+  const [exampleId, setExampleId] = useState("");
   const fileInput = useRef(null);
   const { user, config, openLogin, refresh } = useAuth();
   const needLogin = config?.required && !user;
@@ -73,6 +98,16 @@ export default function NewCheck() {
     }
   }
 
+  async function retryPaper(paper) {
+    const value = paper.arxiv_id ? `arXiv:${paper.arxiv_id}` : paper.doi;
+    if (!value) return;
+    const fresh = await run(`retry-${paper.id}`, () => api.addIdentifier(value));
+    if (fresh) {
+      setPapers((list) => [...list.filter((p) => p.id !== paper.id && p.id !== fresh.id), fresh]);
+      setSentences(null);
+    }
+  }
+
   async function onUpload(files) {
     let count = papers.length;
     for (const file of Array.from(files || [])) {
@@ -110,13 +145,15 @@ export default function NewCheck() {
     }
   }
 
-  async function onExample() {
-    const example = EXAMPLE_TEXT[lang];
-    setText(example);
+  async function onExample(example) {
+    const exampleText = example.text[lang];
+    setExampleId(example.id);
+    setText(exampleText);
+    setPapers([]);
     setSentences(null);
-    const paper = await run("paper", () => api.addIdentifier(EXAMPLE_PAPER));
+    const paper = await run("paper", () => api.addIdentifier(example.paper));
     if (paper) addPaper(paper);
-    await splitText(example);
+    await splitText(exampleText);
   }
 
   const toggle = (idx) => setSentences((list) => list.map((x) => (x.idx === idx ? { ...x, selected: !x.selected } : x)));
@@ -175,24 +212,37 @@ export default function NewCheck() {
       </section>
 
       {health && (!health.ok || !health.llm) && (
-        <div className="notice">{health.ok === false ? t("home.noBackend") : t("home.rulesMode")}</div>
+        <div className="notice" role="status">{health.ok === false ? t("home.noBackend") : t("home.rulesMode")}</div>
       )}
 
       <div className="compose">
         <div className="compose-main">
           <section className="card step-card">
-            <div className="card-head">
+            <div className="card-head example-card-head">
               <h2>
                 <StepBadge n={1} done={steps[0].done} /> {t("home.step1")}
               </h2>
-              <button className="ghost small-btn" onClick={onExample} disabled={!!busy}>
-                {t("home.example")}
-              </button>
+              <div className="example-picker" role="group" aria-label={t("home.exampleGroup")}>
+                {EXAMPLES.map((example) => (
+                  <button
+                    key={example.id}
+                    type="button"
+                    className={`ghost small-btn example-option ${exampleId === example.id ? "active" : ""}`}
+                    onClick={() => onExample(example)}
+                    disabled={!!busy}
+                    aria-pressed={exampleId === example.id}
+                  >
+                    {t(example.label)}
+                  </button>
+                ))}
+              </div>
             </div>
             <textarea
               value={text}
+              aria-label={t("home.step1")}
               onChange={(e) => {
                 setText(e.target.value);
+                setExampleId("");
                 setSentences(null);
               }}
               placeholder={t("home.textPlaceholder")}
@@ -216,6 +266,7 @@ export default function NewCheck() {
             <form onSubmit={onAddIdentifier} className="identifier-form">
               <input
                 value={identifier}
+                aria-label={t("home.step2")}
                 onChange={(e) => setIdentifier(e.target.value)}
                 placeholder={t("home.idPlaceholder")}
                 disabled={full}
@@ -226,6 +277,13 @@ export default function NewCheck() {
             </form>
             <label
               className={`dropzone ${dragging ? "over" : ""} ${full ? "disabled" : ""}`}
+              tabIndex={full ? -1 : 0}
+              onKeyDown={(e) => {
+                if (!full && (e.key === "Enter" || e.key === " ")) {
+                  e.preventDefault();
+                  fileInput.current?.click();
+                }
+              }}
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragging(true);
@@ -242,6 +300,7 @@ export default function NewCheck() {
                 type="file"
                 accept="application/pdf"
                 multiple
+                tabIndex={-1}
                 onChange={(e) => onUpload(e.target.files)}
                 disabled={full}
               />
@@ -252,7 +311,7 @@ export default function NewCheck() {
               </span>
               <span className="hint">{t("home.dropHint")}</span>
             </label>
-            {busy === "paper" && <p className="hint">{t("home.adding")}</p>}
+            {busy === "paper" && <p className="hint" role="status">{t("home.adding")}</p>}
             {papers.length > 0 && (
               <ul className="paper-list">
                 {papers.map((p) => (
@@ -272,13 +331,27 @@ export default function NewCheck() {
                       </div>
                       {p.warning && <div className="paper-warning">{tx(p.warning)}</div>}
                     </div>
-                    <button
-                      className="icon-btn"
-                      title={t("home.remove")}
-                      onClick={() => setPapers((l) => l.filter((x) => x.id !== p.id))}
-                    >
-                      ×
-                    </button>
+                    <div className="paper-actions">
+                      {["failed", "stale"].includes(p.fulltext_status) && (p.arxiv_id || p.doi) && (
+                        <button
+                          type="button"
+                          className="link small"
+                          onClick={() => retryPaper(p)}
+                          disabled={busy === `retry-${p.id}`}
+                        >
+                          {busy === `retry-${p.id}` ? t("home.retrying") : t("home.retry")}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        title={t("home.remove")}
+                        aria-label={`${t("home.remove")}: ${p.title || t("home.titlePending")}`}
+                        onClick={() => setPapers((l) => l.filter((x) => x.id !== p.id))}
+                      >
+                        ×
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -296,7 +369,7 @@ export default function NewCheck() {
                 onClick={() => splitText(text)}
                 disabled={!canSplit || busy === "split"}
               >
-                {sentences ? t("home.resplit") : t("home.split")}
+                {busy === "split" ? t("home.splitting") : sentences ? t("home.resplit") : t("home.split")}
               </button>
             </div>
             {!sentences ? (
@@ -311,6 +384,7 @@ export default function NewCheck() {
                       type="button"
                       className={`pick ${s.selected ? "on" : ""}`}
                       onClick={() => toggle(s.idx)}
+                      aria-pressed={s.selected}
                       title={
                         [
                           s.has_number && t("home.flagNumberTitle"),
@@ -349,11 +423,11 @@ export default function NewCheck() {
                 </li>
               ))}
             </ol>
-            {error && <div className="error">{error}</div>}
+            {error && <div className="error" role="alert">{error}</div>}
             <button className="primary block" onClick={onStart} disabled={!canStart || busy === "start"}>
               {busy === "start" ? t("home.starting") : needLogin ? t("home.loginToStart") : t("home.start")}
             </button>
-            <p className="hint center">{blocker || t("home.willCheck", { n: selectedCount, p: readyPapers.length })}</p>
+            <p className="hint center" aria-live="polite">{blocker || t("home.willCheck", { n: selectedCount, p: readyPapers.length })}</p>
             {user?.quota && <p className="hint center">{t("home.quotaLeft", { n: Math.max(0, user.quota - user.used) })}</p>}
           </div>
         </aside>
@@ -373,7 +447,7 @@ function PaperStatus({ paper }) {
   const status = paper.fulltext_status;
   const label = PAPER_STATUS_CLASS[status] ? t(`paper.${status}`, { n: paper.n_paragraphs }) : status;
   return (
-    <span className={`tag ${PAPER_STATUS_CLASS[status] || "yellow"}`}>
+    <span className={`tag ${PAPER_STATUS_CLASS[status] || "yellow"}`} role="status">
       {status === "processing" && <span className="spinner" />}
       {label}
     </span>

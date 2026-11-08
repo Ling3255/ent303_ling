@@ -380,6 +380,42 @@ main { flex: 1; width: 100%; max-width: 1320px; margin: 0 auto; padding: 24px; }
   .layer-body { padding: 6px 14px 12px; }
 }
 
+/* ============ 示例、筛选与可访问性 ============ */
+.example-picker { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+.example-option { color: var(--text-2); }
+.example-option.active { color: var(--brand); background: var(--brand-bg); border-color: #b9c9f5; }
+.paper-actions { display: flex; align-items: flex-start; gap: 8px; flex-shrink: 0; }
+.dropzone:focus-visible, .layer header:focus-visible, .sent[role="button"]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.side-card .error { max-height: 180px; overflow-y: auto; overflow-wrap: anywhere; }
+.report-filters { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.filter-buttons { display: flex; gap: 6px; padding: 3px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.filter-btn { border: 0; padding: 5px 12px; background: transparent; color: var(--text-2); font-size: 13px; }
+.filter-btn.active { background: var(--brand-bg); color: var(--brand); font-weight: 600; }
+.filter-status { color: var(--muted); font-size: 12px; }
+.stat.active { outline: 2px solid var(--brand); outline-offset: 1px; background: var(--brand-bg); }
+.sent.filtered-out { opacity: 0.25; background: transparent; box-shadow: none; }
+.sent.filtered-out:hover, .sent.filtered-out:focus-visible { opacity: 0.75; }
+.pdf-highlight { border-radius: 2px; }
+
+@media (max-width: 640px) {
+  .example-card-head { align-items: flex-start; flex-direction: column; }
+  .example-picker { width: 100%; justify-content: flex-start; }
+  .example-option { flex: 1; justify-content: center; }
+  .report-filters { align-items: flex-start; flex-direction: column; gap: 4px; }
+  .filter-buttons { width: 100%; }
+  .filter-btn { flex: 1; justify-content: center; }
+  .filter-status { align-self: flex-end; }
+  .paper-actions { flex-direction: column-reverse; align-items: flex-end; }
+  .modal { width: 100vw; height: 100vh; border-radius: 0; }
+  .modal-bar { gap: 6px; padding: 8px; }
+  .modal-title { flex-basis: 100%; }
+  .pdf-scroll { padding: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
 /* ============ 证据单（打印） ============ */
 .print-page { max-width: 210mm; margin: 0 auto; padding: 12mm; background: #fff; font-size: 11px; line-height: 1.45; }
 .print-actions { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
